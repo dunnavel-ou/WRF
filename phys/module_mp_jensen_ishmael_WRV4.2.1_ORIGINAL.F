@@ -18,30 +18,9 @@ module module_mp_jensen_ishmael
   ! size-related mixing ratio are predicted for each ice species.  That makes 12 prognostic variables    !
   ! for ice. Just throw more processors at it. Rain mass and number and cloud mass are also predicted    !
   ! See Jensen et al. 2017 (JAS), Jensen et al. 2018 (MWR), and Jensen et al. 2018 (JAS) for details.    !
-  !
-  !------------------------------------------------------------------------------------------------------!
-  ! WRFV4.2.1 Update: This version of ISHMAEL represents ice aggregates as reduced-density tri-axial     !
-  !                 ellipsoids following Dunnavan et al. 2019 and Dunnavan 2020. Aggregate mass and      !
-  !                 number are predicted and volume-weighted aggregate density is fixed. Using ellipsoids!
-  !                 rather than spheres/fractals therefore provides multiplicative correction factors    !
-  !                 for aggregate shapes based off Multi-Angle Snowflake Camera (MASC) data. Currently,  !
-  !                 shape and density are fixed but future updates will predict shape and density.       !
-  !                                                                                                      !
-  !                 The tenative name for this weird aggregation scheme is:                              !
-  !                 Stochastic Triple Axis Redistribution By Using Collection Kernels                    !
-  !                                                  or                                                  !
-  !                                          STARBUCK (Melville 1851)                                    !
-  !                                                                                                      !
-  !                                                                                                      !
-  ! Edwin Lee Dunnavan (ELD), Cooperative Institute for Mesoscale Meteorological Studies (CIMMS),        !
-  ! dunnavel@ou.edu                                                                                      !
-  ! Date: 05/20/19                                                                                       !
-  !                                                                                                      !
-  !------------------------------------------------------------------------------------------------------!
-  !                                                                                                      !
   !                                                                                                      !
   ! Author:        Anders A. Jensen, NCAR-RAL, ajensen@ucar.edu, 303-497-8484                            ! 
-  ! Last modified: 07 Sep 2020 (ISHMAEL version 0.2)                                                     !
+  ! Last modified: 07 June 2019 (ISHMAEL version 0.1)                                                    !
   !------------------------------------------------------------------------------------------------------!
 
   use module_wrf_error   
@@ -61,60 +40,7 @@ module module_mp_jensen_ishmael
        T0          = 273.15,      &  !.. STP temperature (K)
        P0          = 101325.0,    &  !.. STP pressure (Pa)
        RHOI        = 920.0,       &  !.. Bulk ice density (kg m^-3)
-       R0          = 1.27494,     &  !.. Air density at 1000 mb, T=T0 (kg m^-3)
-       NU          = 4.0,         &  !.. Shape parameter for free ice PSDs
-       NU_AGG      = 1.0,         &  !.. Shape parameter for aggregate PSD
-       ao          = 0.1e-6,      &  !.. min a-axis scaling factor
-       zet         = 1.88,        &  !.. Particle area power-law exponent from Mitchell 1996
-       sig_heyms   = 0.2285,      &  !.. Particle area power-law coefficient from Mitchell 1996
-       kc          = 1.0,         &  !.. Fallspeed parameter from Dunnavan 2020
-       a0          = 1.7e-3,      &  !.. Mitchell 2005 fall speed drag parameter
-       b0          = 0.8,         &  !.. Mitchell 2005 fall speed drag parameter
-       Co          = 0.6,         &  !.. Mitchell 2005 fall speed drag parameter
-       delta_0     = 5.83,        &  !.. Mitchell 2005 fall speed drag parameter
-       phinuc      = 1.0,         &
-       Ec          = 1.0,         &
-       betmon      = 0.5,         &
-       bcp         = 16.98,       & ! Phillips et al. 2015 Snow Aggregation Sticking Efficiency
-       ccp         = 1.023,       & ! Phillips et al. 2015 Snow Aggregation Sticking Efficiency
-       dcp         = 3981.,       & ! Phillips et al. 2015 Snow Aggregation Sticking Efficiency
-       fcp         = 4.e-6,       & ! Phillips et al. 2015 Snow Aggregation Sticking Efficiency
-       E0p         = 3.e4,        & ! Phillips et al. 2015 Snow Aggregation Sticking Efficiency
-       T1p         = -15.,        & ! Phillips et al. 2015 Snow Aggregation Sticking Efficiency
-       gamp        = 1.3,         & ! Phillips et al. 2015 Snow Aggregation Sticking Efficiency
-       kamp        = 1.5,         & ! Phillips et al. 2015 Snow Aggregation Sticking Efficiency
-       chipa       = 1.,          & ! Phillips et al. 2015 Snow Aggregation Sticking Efficiency
-       chipb       = 3.,          & ! Phillips et al. 2015 Snow Aggregation Sticking Efficiency
-       omegp       = 0.05,        & ! Phillips et al. 2015 Snow Aggregation Sticking Efficiency
-       b1p         = 0.05,        & ! Phillips et al. 20015 Snow Aggregation breakup efficiency
-       b2p         = 0.05,        & ! Phillips et al. 20015 Snow Aggregation breakup efficiency
-       b3p         = 0.05
-
-!.. Define the ice species
-!.. Do not change these without changing/knowing how nucleation works
-  integer, parameter :: CAT  = 3 !.. Number of ice categories (species)
-  integer, parameter :: IICE1 = 1 !.. Ice initiated as planar
-  integer, parameter :: IICE2 = 2 !.. Ice initiated as columnar
-  integer, parameter :: IICE3 = 3 !.. Aggregates
-
- !.. AGG Stuff
-  real, private :: alph_ar_agg, bet_ar_agg, alphv_agg,chi_ba,chi_ca
-  real, private :: abatog, pbmin, pcmin, fs_agg, alph_agg,Sa0_agg, Sa1_agg
-  real, private :: sigma, pbeta_area, abamax, abamin,pbeta_chi
-  real, private :: pba, pcb, effc, rhobar_ellip, phiagg
-  real, private :: betx_agg, betm_sph, betm_agg, abet, bbet
-
-  real, private :: C1, C2
-
-  real, private :: aba,bba,bcb,bet_ba,bet_ca,phiba_phica_bar,pb2
-
-  real, dimension(3), private :: ki, Cnk, pbeta_colx, pbeta_coly
-
-
-  integer, private, parameter ::  &
-      agg_switch = 1,             & ! 0 = Spheres/fractals, 1 = Ellipsoid dist., 2 = Oblate spheroid?
-      dvt_switch = 1                ! 0 = Wisner Approx., 1 = Seifert Approx.
-
+       R0          = 1.27494         !.. Air density at 1000 mb, T=T0 (kg m^-3)
 
   !.. The lookup table arrays are itab for ice-cloud water collection 
   !.. and itabr for ice-rain collection. The lookup tables are read in 
@@ -134,20 +60,57 @@ module module_mp_jensen_ishmael
   real(kind=LUT_KIND_R4), private, allocatable, dimension(:,:,:,:,:) :: itab_o, itabr_o
   real(kind=LUT_KIND_R4), private, allocatable, dimension(:) :: gamma_tab_o
 
-
 contains
   !--------------------------------------------------------------------------------------------------------------!
   !--------------------------------------------------------------------------------------------------------------!
   !.. This subroutine currently reads in the ice-cloud collection,
   !.. ice-rain collecion, gamma calculations, and inherent growth ratio 
-  !.. data lookup tables and calculates the aggregate and ice-ice aggregation parameters.
+  !.. data lookup tables and calculates the ice-ice aggregation lookup table. 
 
   subroutine jensen_ishmael_init
     implicit none
+    
+    integer :: i1, i2, i3, i4, icat
+    integer, parameter :: ncat=7,npair=35,ndn=60
+    integer :: ipair(ncat,ncat)
+    real, dimension(ncat,9) :: dstprms
+    real, dimension(ncat) :: gnu,cfmas,pwmas,cfvt,pwvt,tablo,tabhi
 
-    integer :: i1, i2, i3, i4, kcol
+  !.. Collection pairs
+    ipair=&
+         reshape((/0,0,3,7,11,15,19          ,1,0,5,9,13,17,21 &             
+         ,2,4,22,24,0,0,0           ,6,8,23,28,0,0,0           &
+         ,10,12,25,29,35,0,0         ,14,16,26,30,32,0,0       &
+         ,18,20,27,31,33,34,0/),                               &
+         (/ncat,ncat/))
 
+  !.. Ice-ice collection lookup table properties (JYH)
+    dstprms=&
+         !-----------------------------------------------------------------------  
+         !-----------------------------------------------------------------------  
+         !        cloud     rain    planar     columnar   aggreg    graup     hail                     
+         !          1         2       3         4       5        6         7   ---> ncat           
+         !-----------------------------------------------------------------------                    
+         reshape((/.5,      .5,    .318,    .318,      .5,      .5,      .5, & !.. shape  (capacitance shape)
+         524.,    524.,    .333,    .333,    .496,    157.,    471.,         & !.. cfmas   (m=cfmas*D**pwmas)
+         3.,      3.,     2.4,     2.4,     2.4,      3.,      3.,           & !.. pwmas                      
+         3173.,    149.,    4.836,   4.836,   3.084,    93.3,    161.,       & !.. cfvt   (v = cfvt*D**pwvt)  
+         2.,      .5,    0.25,     .25,      .2,      .5,      .5,           & !.. pwvt                       
+         1.e-6,   1.e-6,   1.e-6,   1.e-6,   1.e-6,   1.e-6,   1.e-6,        & !.. tablo  (size limits for table)
+         1.e-2,   1.e-2,   1.e-2,   1.e-2,   1.e-2,   1.e-2,   1.e-2,        & !.. tabhi                      
+         .1e-5,   .1e-4,   .1e-5,   .1e-5,   .1e-4,   .1e-4,   .1e-4,        & !.. dnmin  (characteristic diam  
+         .1e-2,   .1e-1,   .1e-1,   .1e-1,   .1e-1,   .1e-1,   .1e-1/),      & !.. dnmax      limits)         
+         (/ncat,9/))
 
+    do icat=1,ncat
+       cfmas(icat)=dstprms(icat,2)
+       pwmas(icat)=dstprms(icat,3)
+       cfvt (icat)=dstprms(icat,4)
+       pwvt (icat)=dstprms(icat,5)
+       tablo(icat)=dstprms(icat,6)
+       tabhi(icat)=dstprms(icat,7)
+       gnu(icat) = 4.0  
+    enddo
 
   !.. Read in ice-cloud water collection lookup table
     if(.not.allocated(itab_o)) then 
@@ -221,121 +184,30 @@ contains
             1.48087, 1.50105, 1.50087, 1.51098 /)
     endif
 
+  !.. make collection table (JYH)                                                                           
+  !.. called only on initialization of the model                                                            
+  !.. coltab = mass mixing ratio collection                                                                  
+  !.. coltabn = number mixing ratio collection                                                               
+  !.. ndn = table elements                                                                                   
+  !.. ncat = # of hydrometeor categories                                                                     
+    if(.not.allocated(coltab)) then
+       allocate(coltab(ndn,ndn,npair))
+    endif
+
+    if(.not.allocated(coltabn)) then
+       allocate(coltabn(ndn,ndn,npair))
+    endif
+    
+  !.. Call to build the aggregation lookup table (JYH)
+    call mkcoltb(ndn,ncat,coltab,coltabn,ipair,gnu,tablo,tabhi,cfmas,pwmas,cfvt,pwvt)
+    print*, 'Jensen_ISHMAEL aggregation lookup table built'
+
   !.. Check that tables are allocated (Thanks to JYH and Shaofeng)
     if(.not.allocated(itab)) allocate(itab(51,51,51,11,2))
     if(.not.allocated(itabr)) allocate(itabr(51,51,51,11,6))
     if(.not.allocated(gamma_tab)) allocate(gamma_tab(505001))
 
     itab = itab_o; itabr = itabr_o; gamma_tab = gamma_tab_o
-
-   !.. Here, pre-calculate all the cool aggregate stuff. ELD.
-   ! Here are some assumed aggregate property constants
-   alphv_agg = (4./3.)*PI
-   betm_sph = 2.0
-   rhobar_ellip = 15.
-   C2 = (delta_0**2)/4.
-   C1 = 1/(C2*sqrt(Co))
-
-
-   ! These are the mean aspect ratios where: pba = mean(b/a), and pcb = mean(c/b)
-   ! abatog is a dispersion factor where higher values represent more concentrated
-   ! ellipsoid shapes. sigma is the orientation std. (cf. Ryzhkov et al. 2011)
-   pba = 0.616
-   pcb = 0.6795
-   !abatog = 0.001
-   abatog = 0.2922
-    !pba = 0.95
-    !pcb = 0.6
-   !abatog = 1.0
-
-   sigma = 20.
-
-   pbmin = pba/(1.-pba)
-   pcmin = pba*pcb/(1.-pcb)
-   abamin = max(pbmin,pcmin)
-   abamax = 20.
-
-   aba = abatog*abamax+(1.-abatog)
-   bba = ((1./pba)-1.)*aba
-   bcb = ((1./pcb)-1.)*aba/pba
-
-   abet = 1.0
-   bbet = 3280.*sigma**(-2)-1.055
-
-    ! Put in bet_ba and bet_ca calculations. sigma.
-   ! if (agg_switch.eq.1) then
-   ! fs_agg = 0.9379*beta_moms(0.3574,0.1636,aba,bba,bcb)
-   ! elseif (agg_switch.eq.2) then
-   ! phiagg = pcb
-   ! fs_agg = sqrt(1.-phiagg**2.)/asin(sqrt(1-phiagg**2.))
-   ! elseif (agg_switch.eq.0) then
-   ! fs_agg = 1.
-   ! endif
-
-
-    if (agg_switch.eq.1) then
-    fs_agg = 0.9379*beta_moms(0.3574,0.1636,aba,bba,bcb)
-    Sa0_agg = 0.4977*beta_moms(1.386,0.09691,aba,bba,bcb)+&
-             0.4965*beta_moms(0.,1.,aba,bba,bcb)
-    Sa1_agg =0.4977*beta_moms(1.386+1.,0.09691+1.,aba,bba,bcb)+&
-            0.4965*beta_moms(1.,2.,aba,bba,bcb)
-    elseif (agg_switch.eq.2) then
-    phiagg = pcb
-    fs_agg = sqrt(1.-phiagg**2.)/asin(sqrt(1-phiagg**2.))
-    elseif (agg_switch.eq.0) then
-    fs_agg = 1.
-    Sa0_agg = 1.
-    Sa1_agg = 1.
-    endif
-
-    alph_ar_agg = 2.**(zet)*10.**(2.*zet-4.)/PI*sig_heyms
-    bet_ar_agg = zet-2.
-
-    ! Calculate all the beta distribution calculations
-    ! Average ellipsoid aspect ratio
-    phiba_phica_bar = beta_moms(1.,1.,aba,bba,bcb)
-
-    ! second shape moment
-    pb2 = beta_moms(2.,2.,aba,bba,bcb)
-
-    ! Need to change
-    ! betm_agg = 1.016*betm_sph-0.1955 ! ellipsoidal beta_m fit which yields same Zagg/qagg**2 as spheres (Dunnavan 2020)
-    ! NEW POWER LAW FIT THAT ENSURES THAT WE USE THE SAME TWO MASS MOMENTS BETWEEN SPHERES AND ELLIPSOIDS
-    betm_agg = 0.8591*(log((gamma(1.+2.*betm_sph)/(gamma(1.+betm_sph)**2))*&
-    (phiba_phica_bar**2/pb2))+0.533)
-
-    ! Ellipsoid projected area power-law approx.
-    bet_ba = 1.0
-    bet_ca = 0.0065*sigma
-
-    ! Fall speed power-law parameters
-    betx_agg = betm_agg - kc*bet_ar_agg
-    !alphx_agg = 8.*alphm_agg*alph_ar_agg**(-kc)*G_HOME*rhodum/(PI*mu**2)
-
-    chi_ba = 1.+kc*bet_ba
-    chi_ca = 1.+kc*bet_ca
-
-    ! Ellipsoid Bulk Area calculation
-    pbeta_area = beta_moms(bet_ba,bet_ca,aba,bba,bcb)
-
-    ! Best number shape calculation
-    pbeta_chi = beta_moms(chi_ba,chi_ca,aba,bba,bcb)
-
-    ! k index
-    ki = (/0., 1., 2./)
-
-    ! Binomial coefficients (2 choose k)
-    Cnk = (/1., 2., 1./)
-
-
-    ! Aggregate Collection
-    do kcol=1,3 ! collection kernel expansion
-    pbeta_colx(kcol) = beta_moms(bet_ba*ki(kcol)/2.,bet_ca*ki(kcol)/2.,aba,bba,bcb)
-    pbeta_coly(kcol) = beta_moms(bet_ba*(1.-ki(kcol)/2.),bet_ca*(1.-ki(kcol)/2.),aba,bba,bcb)
-
-    enddo
-
-
 
   end subroutine jensen_ishmael_init
 
@@ -355,7 +227,7 @@ contains
        diag_vmi3d_1, diag_di3d_1, diag_rhopo3d_1, diag_phii3d_1, &
        diag_vmi3d_2, diag_di3d_2, diag_rhopo3d_2, diag_phii3d_2, &
        diag_vmi3d_3, diag_di3d_3, diag_rhopo3d_3, diag_phii3d_3, &
-       diag_itype_1,diag_itype_2,diag_itype_3       &
+       diag_itype_1,diag_itype_2,diag_itype_3                    &
        )
 
   !.. ITIMESTEP - time step counter (integer)
@@ -377,7 +249,6 @@ contains
   !.. CI2 - columnar-nucleated c^2a mixing ratio (m^3 kg^-1)
   !.. QI3 - aggregate mixing ratio (kg kg^-1)
   !.. NI3 - aggregate number mixing ratio (kg^-1)
-  !.. NMON3 - aggregate monomer mixing ratio (kg^-1)
   !.. AI3 - aggregate a^2c mixing ratio (m^3 kg^-1)
   !.. CI3 - aggregate c^2a mixing ratio (m^3 kg^-1)
   !.. IDS,IDE - I domain start/end locations
@@ -408,7 +279,6 @@ contains
   !.. DIAG_PHII3D_1 - planar-nucleated number-weighted aspect ratio
   !.. DIAG_PHII3D_2 - columnar-nucleated number-weighted aspect ratio
   !.. DIAG_PHII3D_3 - aggregate number-weighted aspect ratio
-  !.. DIAG_NMON3D - aggregate number-weighted # of monomers
   !.. DIAG_ITYPE_1 - currently not used
   !.. DIAG_ITYPE_2 - currently not used
   !.. DIAG_ITYPE_3 - currently not used
@@ -435,24 +305,27 @@ contains
          diag_vmi3d_1, diag_di3d_1, diag_rhopo3d_1, diag_phii3d_1,   &
          diag_vmi3d_2, diag_di3d_2, diag_rhopo3d_2, diag_phii3d_2,   &
          diag_vmi3d_3, diag_di3d_3, diag_rhopo3d_3, diag_phii3d_3,   &
-         diag_itype_1, diag_itype_2, diag_itype_3
-
-
-    real, dimension(ims:ime, kms:kme, jms:jme) :: diag_nmon3d
+         diag_itype_1, diag_itype_2, diag_itype_3                                    
 
   !.. 2D variables
     real, dimension(ims:ime, jms:jme), intent(inout) ::              &
          rainnc, rainncv, snownc, snowncv
 
     integer :: I,K,J
-
+    
+  !.. Define the ice species 
+  !.. Do not change these without changing/knowing how nucleation works
+    integer, parameter :: CAT  = 3 !.. Number of ice categories (species)
+    integer, parameter :: ICE1 = 1 !.. Ice initiated as planar
+    integer, parameter :: ICE2 = 2 !.. Ice initiated as columnar
+    integer, parameter :: ICE3 = 3 !.. Aggregates
 
   !.. Use tile locations for our variables
   !.. Make everthing 1D for our loop
   !.. These variables go in and out of newmicro
     real, dimension(kts:kte) ::                    &  
          th1d, qv1d, qc1d, qr1d, nr1d, p1d, dz1d,  &
-         effc1d, effi1d, dbz1d, nmon1d
+         effc1d, effi1d, dbz1d
 
     real, dimension(cat, kts:kte) ::               &  
          qi1d, ni1d, ai1d, ci1d,                   &
@@ -462,17 +335,13 @@ contains
     real :: qrpre1d
     real, dimension(cat) :: qipre1d
 
-    ! Aggregates output for fallspeed variables
-!    REAL :: sigvt1D(KTE), bm_agg1D(KTE)
-!    REAL :: zetba1(KTE), zetca1(KTE)
-
   !--------------------------------------------------------------------------------------------------------------!
   !--------------------------------------------------------------------------------------------------------------!
   !.. Accumulated precipitation in one timestep (zero out before microphysics)
     qrpre1d      =0.
-    qipre1d(IICE1)=0.
-    qipre1d(IICE2)=0.
-    qipre1d(IICE3)=0.
+    qipre1d(ICE1)=0.
+    qipre1d(ICE2)=0.
+    qipre1d(ICE3)=0.
     
   !.. Loop over the grid and send each vertical column into the microphysics routine
     do j=jts,jte             !.. j loop (north-south)         
@@ -493,42 +362,41 @@ contains
              EFFI1D(k)       =  0.
              DBZ1D(k)        =  -35.
   !.. Planar-nucleated
-             QI1D(IICE1,k)    = QI1(i,k,j)
-             NI1D(IICE1,k)    = NI1(i,k,j)
-             AI1D(IICE1,k)    = AI1(i,k,j)
-             CI1D(IICE1,k)    = CI1(i,k,j)
-             VMI1D(IICE1,k)   = 0.
-             DI1D(IICE1,k)    = 0.
-             RHOPO1D(IICE1,k) = 0.
-             PHII1D(IICE1,k)  = 0.
-             ICETYPE1D(IICE1,k) =  0.
+             QI1D(ICE1,k)    = QI1(i,k,j)
+             NI1D(ICE1,k)    = NI1(i,k,j)
+             AI1D(ICE1,k)    = AI1(i,k,j)
+             CI1D(ICE1,k)    = CI1(i,k,j)
+             VMI1D(ICE1,k)   = 0.
+             DI1D(ICE1,k)    = 0.
+             RHOPO1D(ICE1,k) = 0.
+             PHII1D(ICE1,k)  = 0.
+             ICETYPE1D(ICE1,k) =  0.
   !.. Columnar-nucleated
-             QI1D(IICE2,k)    = QI2(i,k,j)
-             NI1D(IICE2,k)    = NI2(i,k,j)
-             AI1D(IICE2,k)    = AI2(i,k,j)
-             CI1D(IICE2,k)    = CI2(i,k,j)
-             VMI1D(IICE2,k)   = 0.
-             DI1D(IICE2,k)    = 0.
-             RHOPO1D(IICE2,k) = 0.
-             PHII1D(IICE2,k)  = 0.
-             ICETYPE1D(IICE2,k) =  0.
+             QI1D(ICE2,k)    = QI2(i,k,j)
+             NI1D(ICE2,k)    = NI2(i,k,j)
+             AI1D(ICE2,k)    = AI2(i,k,j)
+             CI1D(ICE2,k)    = CI2(i,k,j)
+             VMI1D(ICE2,k)   = 0.
+             DI1D(ICE2,k)    = 0.
+             RHOPO1D(ICE2,k) = 0.
+             PHII1D(ICE2,k)  = 0.
+             ICETYPE1D(ICE2,k) =  0.
   !.. Aggregates
-             QI1D(IICE3,k)    = QI3(i,k,j)
-             NI1D(IICE3,k)    = NI3(i,k,j)
-             AI1D(IICE3,k)    = AI3(i,k,j)
-             CI1D(IICE3,k)    = 0.
-             NMON1D(k)        = CI3(i,k,j)
-             VMI1D(IICE3,k)   = 0.
-             DI1D(IICE3,k)    = 0.
-             RHOPO1D(IICE3,k) = 0.
-             PHII1D(IICE3,k)  = 0.
-             ICETYPE1D(IICE3,k) =  0.
+             QI1D(ICE3,k)    = QI3(i,k,j)
+             NI1D(ICE3,k)    = NI3(i,k,j)
+             AI1D(ICE3,k)    = AI3(i,k,j)
+             CI1D(ICE3,k)    = CI3(i,k,j)
+             VMI1D(ICE3,k)   = 0.
+             DI1D(ICE3,k)    = 0.
+             RHOPO1D(ICE3,k) = 0.
+             PHII1D(ICE3,k)  = 0.
+             ICETYPE1D(ICE3,k) =  0.
           enddo !.. (vertical k-loop)
 
   !.. Call me Ishmael.
           call me_ishmael(itimestep, kts, kte, i, j, dt_in, p1d, dz1d,   &
-               th1d, qv1d, qc1d, qr1d, nr1d, qi1d, ni1d, nmon1d, ai1d, ci1d,&
-               effc1d, effi1d, dbz1d, icetype1d,  &
+               th1d, qv1d, qc1d, qr1d, nr1d, qi1d, ni1d, ai1d, ci1d,     &
+               CAT, ICE1, ICE2, ICE3, effc1d, effi1d, dbz1d, icetype1d,  &
                vmi1d, di1d, rhopo1d, phii1d, qrpre1d, qipre1d)
 
   !.. Send the 1D columns from newmicro back to WRF
@@ -542,56 +410,45 @@ contains
              DIAG_EFFI3D(i,k,j)  =   max((min(EFFI1D(k),999.e-6)),5.e-6)
              DIAG_DBZ3D(i,k,j)   =   max(dbz1d(k),-35.)
   !.. Planar-nucleated
-             QI1(i,k,j)    =    QI1D(IICE1,k)
-             NI1(i,k,j)    =    NI1D(IICE1,k)
-             AI1(i,k,j)    =    AI1D(IICE1,k)
-             CI1(i,k,j)    =    CI1D(IICE1,k)
-             DIAG_VMI3D_1(i,k,j)  = vmi1d(IICE1,k)
-             DIAG_DI3D_1(i,k,j)   = di1d(IICE1,k)
-             DIAG_RHOPO3D_1(i,k,j)= rhopo1d(IICE1,k)
-             DIAG_PHII3D_1(i,k,j) = phii1d(IICE1,k)
-             DIAG_ITYPE_1(i,k,j)  = icetype1d(IICE1,k)
+             QI1(i,k,j)    =    QI1D(ICE1,k) 
+             NI1(i,k,j)    =    NI1D(ICE1,k) 
+             AI1(i,k,j)    =    AI1D(ICE1,k) 
+             CI1(i,k,j)    =    CI1D(ICE1,k)  
+             DIAG_VMI3D_1(i,k,j)  = vmi1d(ICE1,k)
+             DIAG_DI3D_1(i,k,j)   = di1d(ICE1,k)
+             DIAG_RHOPO3D_1(i,k,j)= rhopo1d(ICE1,k)
+             DIAG_PHII3D_1(i,k,j) = phii1d(ICE1,k)
+             DIAG_ITYPE_1(i,k,j)  = icetype1d(ICE1,k)
   !.. Columnar-nucleated
-             QI2(i,k,j)    =    QI1D(IICE2,k)
-             NI2(i,k,j)    =    NI1D(IICE2,k)
-             AI2(i,k,j)    =    AI1D(IICE2,k)
-             CI2(i,k,j)    =    CI1D(IICE2,k)
-             DIAG_VMI3D_2(i,k,j)  = vmi1d(IICE2,k)
-             DIAG_DI3D_2(i,k,j)   = di1d(IICE2,k)
-             DIAG_RHOPO3D_2(i,k,j)= rhopo1d(IICE2,k)
-             DIAG_PHII3D_2(i,k,j) = phii1d(IICE2,k)
-             DIAG_ITYPE_2(i,k,j)  = icetype1d(IICE2,k)
+             QI2(i,k,j)    =    QI1D(ICE2,k) 
+             NI2(i,k,j)    =    NI1D(ICE2,k) 
+             AI2(i,k,j)    =    AI1D(ICE2,k) 
+             CI2(i,k,j)    =    CI1D(ICE2,k)  
+             DIAG_VMI3D_2(i,k,j)  = vmi1d(ICE2,k)
+             DIAG_DI3D_2(i,k,j)   = di1d(ICE2,k)
+             DIAG_RHOPO3D_2(i,k,j)= rhopo1d(ICE2,k)
+             DIAG_PHII3D_2(i,k,j) = phii1d(ICE2,k)
+             DIAG_ITYPE_2(i,k,j)  = icetype1d(ICE2,k)
   !.. Aggregates
-             QI3(i,k,j)    =    QI1D(IICE3,k)
-             NI3(i,k,j)    =    NI1D(IICE3,k)
-             !NMON3(i,k,j)  =    NMON1D(k)
-             AI3(i,k,j)    =    AI1D(IICE3,k)
-             !CI3(i,k,j)    =    CI1D(IICE3,k)
-             CI3(i,k,j)    = NMON1D(k) ! replaced with monomer number
-             DIAG_VMI3D_3(i,k,j)  = vmi1d(IICE3,k)
-             DIAG_DI3D_3(i,k,j)   = di1d(IICE3,k)
-             DIAG_RHOPO3D_3(i,k,j)= rhopo1d(IICE3,k)
-             !DIAG_PHII3D_3(i,k,j) = phii1d(IICE3,k)
-             if (QI3(i,k,j).gt.1e-8.and.NI3(i,k,j).gt.1.25e-7) then
-             DIAG_PHII3D_3(i,k,j) = max(NMON1D(k),1.25e-7)/max(NI1D(IICE3,k),1.25e-7) ! number-weighted # of monomers for aggs
-             DIAG_PHII3D_3(i,k,j) = max(DIAG_PHII3D_3(i,k,j),2.)
-             else
-             DIAG_PHII3D_3(i,k,j) = 2.0
-             endif
-
-             !DIAG_NMON3D(i,k,j) = NMON1D(k)/NI1D(IICE3,k) ! number-weighted # of monomers for aggs
-             !DIAG_NMON3D(i,k,j) = 0.
-             DIAG_ITYPE_3(i,k,j)  = icetype1d(IICE3,k)
+             QI3(i,k,j)    =    QI1D(ICE3,k) 
+             NI3(i,k,j)    =    NI1D(ICE3,k) 
+             AI3(i,k,j)    =    AI1D(ICE3,k) 
+             CI3(i,k,j)    =    CI1D(ICE3,k)  
+             DIAG_VMI3D_3(i,k,j)  = vmi1d(ICE3,k)
+             DIAG_DI3D_3(i,k,j)   = di1d(ICE3,k)
+             DIAG_RHOPO3D_3(i,k,j)= rhopo1d(ICE3,k)
+             DIAG_PHII3D_3(i,k,j) = phii1d(ICE3,k)
+             DIAG_ITYPE_3(i,k,j)  = icetype1d(ICE3,k)
           enddo
 
   !.. Accumulated precipitation and precipitation rates
   !.. Frozen precipitation
-          SNOWNC(i,j) = SNOWNC(i,j) + qipre1d(IICE1) + qipre1d(IICE2) + qipre1d(IICE3)
-          SNOWNCV(i,j) = qipre1d(IICE1) + qipre1d(IICE2) + qipre1d(IICE3)
+          SNOWNC(i,j) = SNOWNC(i,j) + qipre1d(ICE1) + qipre1d(ICE2) + qipre1d(ICE3)
+          SNOWNCV(i,j) = qipre1d(ICE1) + qipre1d(ICE2) + qipre1d(ICE3)
 
   !.. Total precipitation         
-          RAINNC(i,j) = RAINNC(i,j) + qrpre1d + qipre1d(IICE1) + qipre1d(IICE2) + qipre1d(IICE3)
-          RAINNCV(i,j) = qrpre1d + qipre1d(IICE1) + qipre1d(IICE2) + qipre1d(IICE3)
+          RAINNC(i,j) = RAINNC(i,j) + qrpre1d + qipre1d(ICE1) + qipre1d(ICE2) + qipre1d(ICE3)
+          RAINNCV(i,j) = qrpre1d + qipre1d(ICE1) + qipre1d(ICE2) + qipre1d(ICE3)
 
        enddo ! i loop (horizontal)
     enddo    ! j loop (north-south)         
@@ -602,26 +459,24 @@ contains
   !--------------------------------------------------------------------------------------------------------------!
   !.. The microphysics
   subroutine me_ishmael(it, kts, kte, i, j, dt, pres_e, dzmic,          &
-       theta, qv, qc, qr, nr, qi, ni, nmon, ai, ci,                     &
+       theta, qv, qc, qr, nr, qi, ni, ai, ci, CAT, ICE1, ICE2, ICE3,    &
        effc1d, effi1d, dbz1d, icetype1d, vmi1d, di1d, rhopo1d, phii1d,  &
        qrpre1d, qipre1d)
 
     implicit none
     
   !.. User logicals (all should be TRUE except for testing)
-    logical, parameter :: AGGREGATION = .TRUE. ! Aggregation
-    logical, parameter :: RIMING      = .TRUE. ! Riming
+    logical, parameter :: RIMING      = .TRUE. ! Riming  
     logical, parameter :: RAIN_ICE    = .TRUE. ! Rain-ice collection (for testing)
     logical, parameter :: FREEZE_QC   = .TRUE. ! Freeze cloud drops (Homogeneous)
     logical, parameter :: SPLINTERS   = .TRUE. ! Rime Splinters
-    logical, parameter :: WET_GROW    = .TRUE. ! Wet growth
+    logical, parameter :: WET_GROW    = .TRUE. ! Wet growth 
 
   !.. Input/Output variables from WRF
     integer, intent(in) :: it, i, j  !.. Integer timestep, model i and j
     integer, intent(in) :: kts, kte  !.. Tile k-start and k-end
-    !integer, intent(in) :: CAT, IICE1, IICE2, IICE3 !.. Number of categories, planar and columnar index
+    integer, intent(in) :: CAT, ICE1, ICE2, ICE3 !.. Number of categories, planar and columnar index
     real, intent(in) :: dt !.. Timestep
-
 
     real, dimension(kts:kte), intent(in) :: pres_e, dzmic !.. Pressure and dz
     real, dimension(kts:kte), intent(inout) :: theta !.. Theta (K) 
@@ -629,7 +484,6 @@ contains
     real, dimension(kts:kte), intent(inout) :: qc    !.. Cloud water mixing ratio (kg kg^-1)
     real, dimension(kts:kte), intent(inout) :: qr    !.. Rain mixing ratio (kg kg^-1)
     real, dimension(kts:kte), intent(inout) :: nr    !.. Rain number mixing ratio (# kg^-1)
-    real, dimension(kts:kte), intent(inout) :: nmon  !.. Aggregate monomer number mixing ratio (# kg^-1)
 
     real, dimension(cat, kts:kte), intent(inout) :: qi !.. Ice mass mixing ratio (kg kg^-1)
     real, dimension(cat, kts:kte), intent(inout) :: ni !.. Ice number mixing ratio (# kg^-1)
@@ -649,12 +503,13 @@ contains
     real, dimension(cat) :: qipre1d !.. Ice liquid-equivalent precipitation accumulation (mm)
 
   !.. The Parameters                                            
-!    real, parameter :: NU = 4.0          !.. Ice distribution parameter (keep at 4)
+    real, parameter :: NU = 4.0          !.. Ice distribution parameter (keep at 4)
+                                         !.. If changed, build new lookup tables
 
     real, parameter :: QSMALL = 1.e-12   !.. Smallest ice mass (kg kg^-1)
     real, parameter :: QNSMALL= 1.25e-7  !.. Smallest ice number (# kg^-1)
     real, parameter :: QASMALL= 1.e-24   !.. Smallest ice volume (m^-3 kg^-1)
- !   real, parameter :: ao = 0.1e-6       !.. alphstr=ao^(1-deltastr)
+    real, parameter :: ao = 0.1e-6       !.. alphstr=ao^(1-deltastr)     
     real, parameter :: AR = 149.1        !.. 'a' parameter in rain fallspeed-size relation (m^(1-br)/s)
     real, parameter :: BR = 0.5          !.. 'b' parameter in rain fallspeed-size relation   
     real, parameter :: F1R = 0.78        !.. Ventilation coefficient for rain    
@@ -718,21 +573,12 @@ contains
   !.. Local variables for Radiation
     real :: lrsig, sig, lwc, ncm3dum, r_n, phirad, radw1, radw2, radw3, totaliwc
 
-    real, dimension(cat) :: alph_area, bet_area, alph_m, alph_v, bet_m, betac, alphc
-    real, dimension(cat) :: Viadum, Vicdum
-
   !.. Local variables for Aggregation
-    real :: an1, an2, an3, phiagg1, phiagg2, phiagg3, alphm_agg, alphx_agg, alphvt_agg
-    real :: vtn, Nmonb
-
-    real, dimension(6) :: dvtn, dvtm, dvtc
-
+    real :: dn1, dn2, dn3, phiagg1, phiagg2, phiagg3
 
   !.. Fall speeds (some not used) and effectice ice radius variables
     real, dimension(kts:kte) :: vtrm, vtrn, vtrmc, vtrnc, nc
-    real, dimension(cat, kts:kte) :: vtn1,vtrni1, effi, vtrmi1, vtrzi1, betvt1
-    real, dimension(cat, kts:kte) :: zetba1, zetca1
-
+    real, dimension(cat, kts:kte) :: vtrni1, effi, vtrmi1, vtrzi1
 
   !.. Lookup table values 
     real ::    rrri, rrni, rqci, rdsi, rrho, proc(cat,2), procr(cat,6)
@@ -742,10 +588,10 @@ contains
 
   !.. Sedimentation variables
     integer :: nn, nstep
-    real, dimension(kts:kte) :: fluxqr, fluxnr, fluxnmon
+    real, dimension(kts:kte) :: fluxqr, fluxnr
     real, dimension(cat, kts:kte) :: fluxqi, fluxni, fluxai, fluxci
     real, dimension(cat) :: falltndqi, falltndni, falltndai, falltndci
-    real :: falltndqr, falltndnr, falltndmon, maxfall
+    real :: falltndqr, falltndnr, maxfall
     logical :: sedi
     logical :: domicro
 
@@ -760,8 +606,6 @@ contains
     real :: pcc     !.. Cloud mass growth rate (kg kg^-1 s^-1)                                            
     real :: qagg(cat)    !.. Aggregation mass tendency (kg kg^-1)
     real :: nagg(cat)    !.. Aggregation number tendency (# kg^-1)
-    real :: vagg(cat)    !.. Aggregation volume tendency (m^3 kg^-1)
-    real :: vcagg(cat)   !.. Aggregation volume tendency (m^3 kg^-1)
     real :: prd(cat)     !.. Vapor growth rate (kg kg^-1 s^-1)                       
     real :: nrd(cat)     !.. Vapor growth number rate sublimation (# kg^-1 s^-1)                       
     real :: ard(cat)     !.. A-axis vapor growth rate mixing ratio (m kg^-1 s^-1) 
@@ -790,7 +634,6 @@ contains
     real :: mim   !.. Mass of homogeneously frozen cloud drops (kg kg^-1 s^-1)
     real :: nimr    !.. Number of homogeneously frozen rain drops (# kg^-1 s^-1)
     real :: mimr    !.. Mass of homogeneously frozen rain drops (kg kg^-1 s^-1)
-    real :: nmon3 ! Monomer transfer rate from aggregation (kg kg^-1 s^-1)
     real :: deltastr(cat)  !.. Delta_* (Average inherent growth ratio)
     real :: rhobar(cat)    !.. Ice effective density (kg m^-3)
     real :: rhodepout(cat) !.. Ice effective density (kg m^-3)
@@ -835,7 +678,6 @@ contains
     real :: mbiggr !.. Biggs freezing (kg kg^-1 s^-1)
     real :: nbiggr !.. Biggs number freezing (# kg^-1 s^-1)
 
-
   !--------------------------------------------------------------------------------------------------------------!
   !--------------------------------------------------------------------------------------------------------------!
   !.. NU=4 is constant so gammnu=6
@@ -866,8 +708,8 @@ contains
        if(temp.gt.T0) qvi=qvs
        sui   = qv(k)/qvi-1.
 
-       if(qc(k).gt.QSMALL.or.qr(k).gt.QSMALL.or.qi(IICE1,k).gt.QSMALL.or.&
-            qi(IICE2,k).gt.QSMALL.or.qi(IICE3,k).gt.QSMALL.or.sup.ge.0.) then
+       if(qc(k).gt.QSMALL.or.qr(k).gt.QSMALL.or.qi(ICE1,k).gt.QSMALL.or.&
+            qi(ICE2,k).gt.QSMALL.or.qi(ICE3,k).gt.QSMALL.or.sup.ge.0.) then
           domicro= .true.
        endif
        
@@ -912,8 +754,6 @@ contains
              rni(cc)=0.
              qagg(cc)=0.
              nagg(cc)=0.
-             vagg(cc)= 0.
-             vcagg(cc)=0.
              prd(cc) =0.
              nrd(cc) =0.
              ard(cc) =0.
@@ -931,9 +771,7 @@ contains
              rhobar(cc)=RHOI
              rhodepout(cc)=RHOI
              rhorimeout(cc)=RHOI
-             if(cc.eq.IICE3) then
-             rhobar(cc)=rhobar_ellip
-             endif
+             if(cc.eq.3) rhobar(cc)=50.
              fv(cc)=1.
              fh(cc)=1.
              rimesum(cc)=0.
@@ -976,13 +814,9 @@ contains
              falltndci(cc)=0.
              di1d(cc,k)=0.
              vmi1d(cc,k)=0.
-             vtn1(cc,k)=0.
              vtrmi1(cc,k)=0.
              vtrni1(cc,k)=0.
              vtrzi1(cc,k)=0.
-             betvt1(cc,k)=1.
-             zetba1(cc,k)=0.
-             zetca1(cc,k)=0.
              rhopo1d(cc,k)=0.
              phii1d(cc,k)=0.
              qipre1d(cc)=0.
@@ -993,9 +827,7 @@ contains
           qrpre1d=0.
           fluxqr(k)=0.
           fluxnr(k)=0.
-          fluxnmon(k)=0.
           falltndqr=0.; falltndnr=0.
-          falltndmon=0.
           vtrm(k)=0.; vtrn(k)=0.
           effc1d(k) = 0.
           effi1d(k) = 0.
@@ -1008,15 +840,6 @@ contains
           gdentotal=400.
           rimedr=0.; rimedrr=0.
           dbzr=0.; dbzsum=0.
-          nmon3 = 0.
-          Nmonb = 2.
-
-
-            ! Output for aggregate fallspeed stuff
-         ! alphvt_agg1D(k) = 0.
-         ! betvt_agg1D(k) = 1.0
-         ! zetba1(k) = 1.0
-         ! zetca1(k) = 1.0
 
   !--------------------------------------------------------------------------------------------------------------!
   !--------------------------------------------------------------------------------------------------------------!
@@ -1066,14 +889,15 @@ contains
                 ni(cc,k)=max(ni(cc,k),QNSMALL)
                 ai(cc,k)=max(ai(cc,k),QASMALL)
                 ci(cc,k)=max(ci(cc,k),QASMALL)
-                if (cc.ne.IICE3) then
                 ani(cc) =max((((ai(cc,k)**2)/(ci(cc,k)*ni(cc,k)))**0.333333333333),2.e-6)
                 cni(cc) =max((((ci(cc,k)**2)/(ai(cc,k)*ni(cc,k)))**0.333333333333),2.e-6)
 
+  !.. Set incoming volume limit after advection
+  !.. This is the smallest bulk volume for which we care about shape              
+  !.. If smaller than this limit, assume spherical
                 if(ai(cc,k).lt.1.e-12.or.ci(cc,k).lt.1.e-12) then
-                ai(cc,k)=min(ai(cc,k),ci(cc,k))
+                   ai(cc,k)=min(ai(cc,k),ci(cc,k))
                    ci(cc,k)=ai(cc,k)
-
                    ani(cc)=(ai(cc,k)/ni(cc,k))**0.3333333333
                    cni(cc)=(ci(cc,k)/ni(cc,k))**0.3333333333
                 endif
@@ -1083,31 +907,21 @@ contains
                    cni(cc)=2.e-6
                 endif
 
-                ci(cc,k) = cni(cc)**2*ani(cc)*ni(cc,k)
+                ci(cc,k) = cni(cc)**2*ani(cc)*ni(cc,k)                                           
                 ai(cc,k) = ani(cc)**2*cni(cc)*ni(cc,k)
 
-                deltastr(cc)=(log(cni(cc))-log(ao))/(log(ani(cc))-log(ao))
+                deltastr(cc)=(log(cni(cc))-log(ao))/(log(ani(cc))-log(ao)) 
 
   !.. Check to keep ice properties in bounds
-                call var_check(fourthirdspi, gammnu, qi(cc,k), deltastr(cc),       &
+                call var_check(NU, ao, fourthirdspi, gammnu, qi(cc,k), deltastr(cc),       &
                      ani(cc), cni(cc), rni(cc), rhobar(cc), ni(cc,k), ai(cc,k), ci(cc,k),  &
                      alphstr, alphv, betam)
 
                 dsold(cc) = deltastr(cc)
 
-                elseif(cc.eq.IICE3) then
-                 call var_check_agg(fourthirdspi,qi(cc,k),ni(cc,k),ani(cc),rhobar(cc))
-                alphm_agg = (qi(cc,k)/ni(cc,k))*(1./phiba_phica_bar)*ani(cc)**(-betm_agg)*gamma(NU_AGG)/gamma(NU_AGG+betm_agg)
-
-                endif
-
-  !.. Set incoming volume limit after advection
-  !.. This is the smallest bulk volume for which we care about shape              
-  !.. If smaller than this limit, assume spherical
-
   !--------------------------------------------------------------------------------------------------------------!
   !--------------------------------------------------------------------------------------------------------------!
-  !.. Ice-cloud riming rates from lookup table (currently excluding riming of aggregates)
+  !.. Ice-cloud riming rates from lookup table
                 if(RIMING.and.qc(k).gt.1.e-7) then
                 
   !.. The lookup table is in log space.  Do not change the following 4 lines without
@@ -1156,7 +970,7 @@ contains
                    qi_qc_nrd(cc)= proc(cc,2)
 
   !.. Limit riming rate if too small
-                   if((rimesum(cc)*i_rhoair(k)).lt.QSMALL.or.cc.eq.IICE3) then
+                   if((rimesum(cc)*i_rhoair(k)).lt.QSMALL) then
                       rimesum(cc)  =0.
                       qi_qc_nrm(cc)=0.
                       qi_qc_nrd(cc)=0.
@@ -1230,7 +1044,7 @@ contains
                    icerateri(cc) = max((procr(cc,6)*ni(cc,k)*nr(k)*rhoair(k)),0.)
                    
   !.. Limit ice-rain rates if to small
-                   if(rainrateri(cc).lt.QSMALL.or.icerateri(cc).lt.QSMALL.or.cc.eq.IICE3) then
+                   if(rainrateri(cc).lt.QSMALL.or.icerateri(cc).lt.QSMALL) then
                       rainrateri(cc)=0.
                       icerateri(cc) =0.
                       numrateri(cc) =0.
@@ -1250,7 +1064,7 @@ contains
                    endif
                    
   !.. procr(cc,1) is the normalized riming rate
-  !.. procr(cc,2) is related to the normalized rime density
+  !.. procr(cc,2) is trelated to the he normalized rime density
   !.. procr(cc,3) is the normalized loss in rain number from riming
   !.. rimesumr is in kg m^-3 s^-1
 
@@ -1262,7 +1076,7 @@ contains
                    qi_qr_nrn(cc)= procr(cc,3)
 
   !.. Limit ice-rain riming if small
-                   if((rimesumr(cc)*i_rhoair(k)).lt.QSMALL.or.cc.eq.IICE3) then
+                   if((rimesumr(cc)*i_rhoair(k)).lt.QSMALL) then
                       rimesumr(cc) =0.
                       qi_qr_nrm(cc)=0.
                       qi_qr_nrd(cc)=0.
@@ -1302,7 +1116,6 @@ contains
   !--------------------------------------------------------------------------------------------------------------!
   !--------------------------------------------------------------------------------------------------------------!
   !.. Inital volume, iwc, #/m^3 for vapor growth
-               if (cc.ne.IICE3) then
                 gamma_arg = NU+2.+deltastr(cc)
                 gi=MIN((MAX((NINT((gamma_arg*100000.)-355000+1)),1)),505001)
 
@@ -1313,39 +1126,22 @@ contains
   !.. Total riming rate (the heating goes into vapor growth)
                 rimetotal(cc) = rimesum(cc)+rimesumr(cc)
                 alphstr=ao**(1.-deltastr(cc))
-  !.. Distribution-averaged capacitance (see Harrington et al. 2013)
-                capgam = capacitance_gamma(ani(cc), deltastr(cc), alphstr, i_gammnu)
-               elseif (cc.eq.IICE3) then
-                nim3dum = ni(cc,k)*rhoair(k)
-                iwci = qi(cc,k)*rhoair(k)
-                call var_check_agg(fourthirdspi,qi(cc,k),ni(cc,k),ani(cc),rhobar(cc))
-                capgam = NU_AGG*ani(cc)*fs_agg
-                !ani(cc) = ((qi(cc,k)/ni(cc,k))*gamma(NU_AGG)/(alphv_agg*phiba_phica_bar*rhobar_ellip*gamma(NU_AGG+3.)))**(1./3.)
-                !ani(cc) = min(max(ani(cc),1.e-8),1.e-2)
-                alphm_agg = (qi(cc,k)/ni(cc,k))*(1./phiba_phica_bar)*ani(cc)**(-betm_agg)*gamma(NU_AGG)/gamma(NU_AGG+betm_agg)
-
-               endif
-
+  !.. Distribtuion-averaged capacitance (see Harrington et al. 2013)
+                capgam = capacitance_gamma(ani(cc), deltastr(cc), NU, alphstr, i_gammnu)
 
   !.. This subroutine first calculates the bulk fall speeds, then the ventilation, 
   !.. and finally the vapor growth (or sublimation) rate. (See Harrington et al. 2013)
-                call vaporgrow(cc, dt, ani(cc), cni(cc), rni(cc), igr, nim3dum, temp, rimetotal(cc),&
-                     pres_e(k), alphstr, sui, sup, qvs, qvi, mu, iwci, rhoair(k), qi(cc,k),    &
-                     dv, kt, nsch, npr, gammnu, i_gammnu, fourthirdspi, svpi, xxls, xxlv, xxlf,&
-                     capgam, vtn1(cc,k), vtrni1(cc,k), vtrmi1(cc,k), vtrzi1(cc,k), betvt1(cc,k), &
-                     anf, cnf, rnf, iwcf, fv(cc),fh(cc), rhobar(cc), deltastr(cc),rhodepout(cc),&
-                     dsdepout(cc),alphm_agg,zetba1(cc,k),zetca1(cc,k))
+                call vaporgrow(dt, ani(cc), cni(cc), rni(cc), igr, nim3dum, temp, rimetotal(cc),         &
+                     pres_e(k), NU, alphstr, sui, sup, qvs, qvi, mu, iwci, rhoair(k), qi(cc,k),          &
+                     dv, kt, ao, nsch, npr, gammnu, i_gammnu, fourthirdspi, svpi, xxls, xxlv, xxlf,      &
+                     capgam, vtrni1(cc,k), vtrmi1(cc,k), vtrzi1(cc,k), anf, cnf, rnf,  iwcf, fv(cc),     &
+                     fh(cc), rhobar(cc), deltastr(cc),rhodepout(cc),dsdepout(cc))
 
   !.. Vapor growth mass growth and axes rates
-                prd(cc)=(iwcf-iwci)*i_rhoair(k)*i_dt
+                prd(cc)=(iwcf-iwci)*i_rhoair(k)*i_dt 
                 prd(cc)=max(prd(cc),-qi(cc,k)*i_dt)
-                if (cc.ne.IICE3) then
                 ard(cc)=(2.*(anf-ani(cc))*cni(cc)+(cnf-cni(cc))*ani(cc))*ani(cc)*ni(cc,k)*i_dt
                 crd(cc)=(2.*(cnf-cni(cc))*ani(cc)+(anf-ani(cc))*cni(cc))*cni(cc)*ni(cc,k)*i_dt
-                elseif(cc.eq.IICE3) then
-                ard(cc) = 0.
-                crd(cc) = 0.
-                endif
 
   !.. Sublimation number loss
                 if(prd(cc).lt.0..and.qi(cc,k).gt.QSMALL) then
@@ -1365,13 +1161,11 @@ contains
   !.. Now calculated the mass growth and axes growth rates and density for riming
 
   !.. Check for wet-growth riming conditions
-  !.. See equation 12.13 in Lamb and Verlinde (2011)
-                if(WET_GROW.and.cc.ne.IICE3) then
+  !.. See Lamb and Verlinde (2011)
+                if(WET_GROW) then
                    rimetotal(cc)=rimesum(cc)+rimesumr(cc)
-                   call wet_growth_check(temp, rhoair(k), xxlv, xxlf, qv(k), dv, kt, qs0,  &
+                   call wet_growth_check(NU, temp, rhoair(k), xxlv, xxlf, qv(k), dv, kt, qs0,  &
                         fv(cc), fh(cc), rimetotal(cc), rni(cc), ni(cc,k), dry_growth(cc))
-
-
                 endif
                 
   !.. If above the melting point, assume high-density riming
@@ -1386,7 +1180,7 @@ contains
   !.. Calculate the ice-cloud rime density
   !.. This is parameterized from Macklin (1962) and is described in
   !.. Jensen et al. 2017 (JAS) 
-                if(RIMING.and.qc(k).gt.QSMALL.and.qi_qc_nrm(cc).gt.0..and.cc.ne.IICE3) then
+                if(RIMING.and.qc(k).gt.QSMALL.and.qi_qc_nrm(cc).gt.0.) then
                    rimec1 = 0.0066 !.. Value at -10C
                    if((temp-T0).lt.-30.) then
                       rimec1 = 0.0036
@@ -1431,7 +1225,7 @@ contains
                 
   !.. Calculate the ice-rain rime density
   !.. This is parameterized from Macklin (1962)
-                if(RAIN_ICE.and.qr(k).gt.QSMALL.and.qi_qr_nrm(cc).gt.0..and.cc.ne.IICE3) then
+                if(RAIN_ICE.and.qr(k).gt.QSMALL.and.qi_qr_nrm(cc).gt.0.) then
                    rimec1 = 0.0066 !.. Value at -10C
                    if((temp-T0).lt.-30.) then
                       rimec1 = 0.0036
@@ -1475,7 +1269,6 @@ contains
                 endif !.. End ice-rain rime density calculation
              
   !.. Caculate the volume after riming
-                if (cc.ne.IICE3) then
                 gamma_arg = NU+2.+deltastr(cc)
                 gi=MIN((MAX((NINT((gamma_arg*100000.)-355000+1)),1)),505001)
                 vfr = fourthirdspi*rnfr**3*gamma_tab(gi)*i_gammnu
@@ -1500,9 +1293,9 @@ contains
                    rnfr = rni(cc)
                 endif
              
-  !.. For dry growth the drops freeze on contact and one axis (the axis perpendicular to the
+  !.. For dry growth the drops freeze on contace and one axis (the axis perpendicular to the 
   !.. fall direction) grows
-                if(dry_growth(cc).and.cc.ne.IICE3) then
+                if(dry_growth(cc)) then
                    cnfr =cni(cc)
                    anfr =ani(cc)
                    phibr= 1.
@@ -1560,13 +1353,7 @@ contains
                    anfr=max(anfr,ani(cc))
 
   !.. Riming mass growth and axes rates
-                   if (cc.ne.IICE3) then
-                   prdr(cc)=(iwcfr-iwci)*i_rhoair(k)*i_dt
-                   elseif(cc.eq.IICE3) then
-                   prdr(cc) = 0.
-
-                   endif
-
+                   prdr(cc)=(iwcfr-iwci)*i_rhoair(k)*i_dt 
                    ardr(cc)=(2.*(anfr-ani(cc))*cni(cc)+(cnfr-cni(cc))*ani(cc))*ani(cc)*ni(cc,k)*i_dt
                    crdr(cc)=(2.*(cnfr-cni(cc))*ani(cc)+(anfr-ani(cc))*cni(cc))*cni(cc)*ni(cc,k)*i_dt
 
@@ -1585,65 +1372,37 @@ contains
 
   !.. For wet growth, mass is added but soaks into the particle and thus
   !.. the density increases but the size does not
-                   if (cc.ne.IICE3) then
-                   prdr(cc)=(iwcfr-iwci)*i_rhoair(k)*i_dt
-                   elseif (cc.eq.IICE3) then
-                   prdr(cc) = 0.
-                    endif
+                   prdr(cc)=(iwcfr-iwci)*i_rhoair(k)*i_dt 
                    ardr(cc)=0.
                    crdr(cc)=0.
                    
                 endif !.. End dry versus wet growth
 
-                endif !.. End non-aggregages riming
-
                 if(temp.gt.T0) then
 
   !.. Melting: ice shapes become more spherical
-                   if (cc.ne.IICE3) then
                    qmlt(cc)=2.*PI*(kt*fh(cc)*(T0-temp)+rhoair(cc)*xxlv*dv*fv(cc)*(qs0-qv(k)))/   & 
                         xxlf*(ni(cc,k)*NU*max(ani(cc),cni(cc))) - &
                         (CPW/xxlf*(temp-T0)*(rimetotal(cc)/rhoair(k) + dQImltri(cc)))
-                   else
-
-                    qmlt(cc)=2.*PI*(kt*fh(cc)*(T0-temp)+rhoair(cc)*xxlv*dv*fv(cc)*(qs0-qv(k)))/   &
-                        xxlf*(ni(cc,k)*NU_AGG*ani(cc))
-
-                   endif
                    
                    qmlt(cc)=min(qmlt(cc),0.)
                    qmlt(cc)=max(qmlt(cc),(-qi(cc,k)*i_dt))
 
-  !.. Don't let very small number mixing ratios (large sizes) cause ice precipitation
-
-                    if(qmlt(cc).lt.0.) then
-
-                     if(cc.lt.IICE3) then
+  !.. Don't let small very number mixing ratios (large sizes) cause ice precipitation
+                   if(qmlt(cc).lt.0.) then
                       if(ai(cc,k).lt.1.e-12.or.ci(cc,k).lt.1.e-12) then
                          qmlt(cc)=-qi(cc,k)*i_dt
                       endif
-
-                     elseif(cc.eq.IICE3) then
-
-                      if(qi(cc,k).lt.QSMALL) then
-
-                        qmlt(cc)=-qi(cc,k)*i_dt
-
-                      endif
-
-                     endif
                    endif
 
                    nmlt(cc) = max((-ni(cc,k)*i_dt),(ni(cc,k)*qmlt(cc)/qi(cc,k)-dNmltri(cc)))
-
-                   if (cc.ne.IICE3) then
+                   
                    gamma_arg = NU+2.+deltastr(cc)
                    gi=MIN((MAX((NINT((gamma_arg*100000.)-355000+1)),1)),505001)
                    tmpmelt=fourthirdspi*alphstr*gamma_tab(gi)*i_gammnu
                    
                    amlt(cc) = (1./tmpmelt)*(1./rhobar(cc))*qmlt(cc) + ai(cc,k)*nmlt(cc)/ni(cc,k)
                    cmlt(cc) = amlt(cc)*cni(cc)/ani(cc)*(1.+(2.*deltastr(cc)))/(2.+deltastr(cc))
-                   endif
 
                 endif
              enddo    !.. End the loop over ice speices
@@ -1701,11 +1460,11 @@ contains
              inrate = inrate*1000.0 !.. #/L to #/m^3
              inrate = inrate*i_rhoair(k) !.. # kg^-1
              
-             if((((ni(IICE1,k)+ni(IICE2,k)+inrate)*rhoair(k))/1000.).le.10000.) then
+             if((((ni(ICE1,k)+ni(ICE2,k)+inrate)*rhoair(k))/1000.).le.10000.) then
                 mnuccd=(inrate)*(fourthirdspi*RHOI*(2.e-6)**3)*i_dt
                 nnuccd=inrate*i_dt
              else
-                curnum = (ni(IICE1,k)+ni(IICE2,k))*rhoair(k)/1000.
+                curnum = (ni(ICE1,k)+ni(ICE2,k))*rhoair(k)/1000.
                 ratel = max(0.,(10000.-curnum))
                 ratekg = ratel*1000.*i_rhoair(k)
                 mnuccd=(ratekg)*(fourthirdspi*RHOI*(2.e-6)**3)*i_dt
@@ -1729,7 +1488,6 @@ contains
 
              do cc = 1, cat
                 if(prdr(cc).gt.0.) then
-
                    nmult(cc) = 35.E4*prdr(cc)*fmult*1000.
                    qmult(cc) = nmult(cc)*fourthirdspi*RHOI*(5.e-6)**3
                    qmult(cc) = min(qmult(cc),prdr(cc))
@@ -1738,277 +1496,54 @@ contains
              enddo
           endif
 
-
-
-
   !.. Aggregation (currently only for T < T0)
-        if(AGGREGATION) then
           if(temp.le.T0) then
-
+             
              do cc = 1, cat
                 ni(cc,k) = max(ni(cc,k),QNSMALL)
                 ai(cc,k) = max(ai(cc,k),QASMALL)
                 ci(cc,k) = max(ci(cc,k),QASMALL)
-
              enddo
-
                 
   !.. Get characteristic diameters for aggregation
-             an1      = ((ai(IICE1,k)**2)/(ci(IICE1,k)*ni(IICE1,k)))**0.333333333333
-             an2      = ((ai(IICE2,k)**2)/(ci(IICE2,k)*ni(IICE2,k)))**0.333333333333
-
-             !an3      = 2.*((ai(IICE3,k)**2)/(ci(IICE3,k)*ni(IICE3,k)))**0.333333333333
-             an3 = ((qi(IICE3,k)/ni(IICE3,k))*gamma(NU_AGG)/(alphv_agg*phiba_phica_bar*rhobar_ellip*gamma(NU_AGG+3.)))**(1./3.)
-             an3 = min(max(an3,1.e-8),1.e-2)
-             alphm_agg = (qi(IICE3,k)/ni(IICE3,k))*(1./phiba_phica_bar)*an3**(-betm_agg)*gamma(NU_AGG)/gamma(NU_AGG+betm_agg)
-
-
-             an1 = MIN(an1,0.5*1.e-2)
-             an2 = MIN(an2,0.5*1.e-2)
-             !an3 = MIN(an3,0.5*1.e-2)
+             dn1      = 2.*((ai(ICE1,k)**2)/(ci(ICE1,k)*ni(ICE1,k)))**0.333333333333
+             dn2      = 2.*((ci(ICE2,k)**2)/(ai(ICE2,k)*ni(ICE2,k)))**0.333333333333
+             dn3      = 2.*((ai(ICE3,k)**2)/(ci(ICE3,k)*ni(ICE3,k)))**0.333333333333
+                  
+             dn1 = MIN(dn1,1.e-2)
+             dn2 = MIN(dn2,1.e-2)
+             dn3 = MIN(dn3,1.e-2)
                 
-             an1 = MAX(an1,0.5*1.e-6)
-             an2 = MAX(an2,0.5*1.e-6)
-             !an3 = MAX(an3,0.5*1.e-6)
+             dn1 = MAX(dn1,1.e-6)
+             dn2 = MAX(dn2,1.e-6)
+             dn3 = MAX(dn3,1.e-6)
                 
   !.. Get ice-one and ice-two aspect ratios 
   !.. Spherical paritcles aggregate at a slower rate than less spherical ones
-             gamma_arg = NU-1.+deltastr(IICE1)
+             gamma_arg = NU-1.+deltastr(1)
              gi=MIN((MAX((NINT((gamma_arg*100000.)-355000+1)),1)),505001)
-             phiagg1=ci(IICE1,k)/ai(IICE1,k)*gamma_tab(gi)*i_gammnu
+             phiagg1=ci(1,k)/ai(1,k)*gamma_tab(gi)*i_gammnu
                 
-             gamma_arg = NU-1.+deltastr(IICE2)
+             gamma_arg = NU-1.+deltastr(2)
              gi=MIN((MAX((NINT((gamma_arg*100000.)-355000+1)),1)),505001)
-             phiagg2=ci(IICE2,k)/ai(IICE2,k)*gamma_tab(gi)*i_gammnu
+             phiagg2=ci(2,k)/ai(2,k)*gamma_tab(gi)*i_gammnu
                 
              phiagg1=MIN(phiagg1,100.)
              phiagg1=MAX(phiagg1,0.01)
                 
              phiagg2=MIN(phiagg2,100.)
              phiagg2=MAX(phiagg2,0.01)
-
-
-    ! projected area-dimensional relationships for free ice categories
-
-            do cc=1,cat
-
-            if (cc.ne.IICE3) then
-
-            alphstr = ao**(1.-deltastr(cc))
-
-            if (deltastr(cc).gt.1.0) then
-                alph_area(cc) = PI*alphstr
-                bet_area(cc) = 1.+deltastr(cc)
-            else
-                alph_area(cc) = PI
-                bet_area(cc) = 2.0
-            endif
-
-    ! Mass-dimensional relationships
-            alph_m(cc) = fourthirdspi*alphstr*rhobar(cc)
-            alph_v(cc) = fourthirdspi*alphstr
-            bet_m(cc) = 2.+deltastr(cc)
-            alphc(cc) = fourthirdspi*alphstr**2
-            betac(cc) = 1.+2.*deltastr(cc)
-
-
-
-            elseif (cc.eq.IICE3) then
-
-            alph_m(cc) = alphm_agg
-            bet_m(cc) = betm_agg
-            alph_area(cc) = PI
-            bet_area(cc) = 2.0
-
-
-            endif
-
-            enddo
-
-
-            Viadum(1) = alph_v(1)*an1**bet_m(1)*ni(1,k)*gamma(NU+bet_m(1))/gammnu
-            Viadum(2) = alph_v(2)*an2**bet_m(2)*ni(2,k)*gamma(NU+bet_m(2))/gammnu
-
-            Vicdum(1) = alphc(1)*an1**betac(1)*ni(1,k)*gamma(NU+betac(1))/gammnu
-            Vicdum(2) = alphc(2)*an2**betac(2)*ni(2,k)*gamma(NU+betac(2))/gammnu
-
-
-
-
-            !---------------------------------------------------!
-            ! So total combinations for aggregation are:
-            !---------------------------------------------------!
-            !    Collected + Collectee = New Category
-            !---------------------------------------------------!
-            !    Plates + Plates   = Agg                    (1)
-            !    Columns + Columns = Agg                    (2)
-            !    Plates + Columns  = Agg                    (3)
-            !    Columns + Plates  = Agg (mass/volume only) (4)
-            !    Plates + Agg      = Agg                    (5)
-            !    Columns + Agg     = Agg                    (6)
-            !    Agg + Agg         = Agg (number only)      (7)
-            !---------------------------------------------------!
-            !---------------------------------------------------!
-            ! total dvt terms
-            !---------------------------------------------------!
-            ! Number: 6 combos
-            !---------------------------------------------------!
-            ! dvtn: Plates + Plates (1)
-            ! dvtn: Columns + Columns (2)
-            ! dvtn: Plates + Columns (3)
-            ! dvtn: Plates + Aggs (4)
-            ! dvtn: Columns + Aggs (5)
-            ! dvtn: Aggs + Aggs (6)
-            !---------------------------------------------------!
-            ! Mass: 6 combos
-            ! dvtm: Plates + Plates (1)
-            ! dvtm: Columns + Columns (2)
-            ! dvtm: Plates + Columns (3)
-            ! dvtm: Columns + Plates (4)
-            ! dvtm: Plates + Aggs (5)
-            ! dvtm: Columns + Aggs (6)
-            !---------------------------------------------------!
-            ! Volume (same as mass):
-            !---------------------------------------------------!
-            ! Volume*aspect ratio: 6 combos
-            ! dvtc: Plates + Plates (1)
-            ! dvtc: Columns + Columns (2)
-            ! dvtc: Plates + Columns (3)
-            ! dvtc: Columns + Plates (4)
-            ! dvtc: Plates + Aggs (5)
-            ! dvtc: Columns + Aggs (6)
-            !---------------------------------------------------!
-            !---------------------------------------------------!
-
-            if(dvt_switch.eq.0) then
-
-            ! Calculate fallspeed difference term for each specie combo
-            ! Mass
-            dvtm(1) = delta_vtm(vtrmi1(IICE1,k),vtrmi1(IICE1,k)) ! P-P
-            dvtm(2) = delta_vtm(vtrmi1(IICE2,k),vtrmi1(IICE2,k)) ! C-C
-            dvtm(3) = delta_vtm(vtrmi1(IICE1,k),vtrmi1(IICE2,k)) ! P-C and C-P
-            dvtm(4) = delta_vtm(vtrmi1(IICE1,k),vtrmi1(IICE3,k)) ! P-A and A-P
-            dvtm(5) = delta_vtm(vtrmi1(IICE2,k),vtrmi1(IICE3,k)) ! C-A and A-C
-
-            ! Volume*Aspect Ratio
-            dvtc(1) = dvtm(1)
-            dvtc(2) = dvtm(2)
-            dvtc(3) = dvtm(3)
-            dvtc(4) = dvtm(4)
-            dvtc(5) = dvtm(5)
-
-            ! Number
-            dvtn(1) = delta_vtm(vtrni1(IICE1,k),vtrni1(IICE1,k)) ! P-P
-            dvtn(2) = delta_vtm(vtrni1(IICE2,k),vtrni1(IICE2,k)) ! C-C
-            dvtn(3) = delta_vtm(vtrni1(IICE1,k),vtrni1(IICE2,k)) ! P-C and C-P
-            dvtn(4) = delta_vtm(vtrni1(IICE1,k),vtrni1(IICE3,k)) ! P-A and A-P
-            dvtn(5) = delta_vtm(vtrni1(IICE2,k),vtrni1(IICE3,k)) ! C-A and A-C
-            dvtn(6) = delta_vtm(vtrni1(IICE3,k),vtrni1(IICE3,k)) ! A-A
-
-            elseif(dvt_switch.eq.1) then
-            ! Calculate fallspeed difference term for each specie combo
-            dvtm(1) = delta_vtm_seifert(vtn1(IICE1,k),bet_area(IICE1),bet_m(IICE1),&
-                      betvt1(IICE1,k),vtn1(IICE1,k),bet_area(IICE1),betvt1(IICE1,k),&
-                      zetba1(IICE1,k),zetca1(IICE1,k),0) !P-P
-
-            dvtm(2) = delta_vtm_seifert(vtn1(IICE2,k),bet_area(IICE2),bet_m(IICE2),&
-                      betvt1(IICE2,k),vtn1(IICE2,k),bet_area(IICE2),betvt1(IICE2,k),&
-                      zetba1(IICE2,k),zetca1(IICE2,k),0) ! C-C
-
-            dvtm(3) = delta_vtm_seifert(vtn1(IICE1,k),bet_area(IICE1),bet_m(IICE1),&
-                      betvt1(IICE1,k),vtn1(IICE2,k),bet_area(IICE2),betvt1(IICE2,k),&
-                      zetba1(IICE2,k),zetca1(IICE2,k),0) !P-C
-
-            dvtm(4) = delta_vtm_seifert(vtn1(IICE2,k),bet_area(IICE2),bet_m(IICE2),&
-                      betvt1(IICE2,k),vtn1(IICE1,k),bet_area(IICE1),betvt1(IICE1,k),&
-                      zetba1(IICE1,k),zetca1(IICE1,k),0) !C-P
-
-            dvtm(5) = delta_vtm_seifert(vtn1(IICE1,k),bet_area(IICE1),bet_m(IICE1),&
-                      betvt1(IICE1,k),vtn1(IICE3,k),bet_area(IICE3),betvt1(IICE3,k),&
-                      zetba1(IICE3,k),zetca1(IICE3,k),1) !P-A
-
-            dvtm(6) = delta_vtm_seifert(vtn1(IICE2,k),bet_area(IICE2),bet_m(IICE2),&
-                      betvt1(IICE2,k),vtn1(IICE3,k),bet_area(IICE3),betvt1(IICE3,k),&
-                      zetba1(IICE3,k),zetca1(IICE3,k),1) !C-A
-
-
-            dvtc(1) = delta_vtm_seifert(vtn1(IICE1,k),bet_area(IICE1),betac(IICE1),&
-                      betvt1(IICE1,k),vtn1(IICE1,k),bet_area(IICE1),betvt1(IICE1,k),&
-                      zetba1(IICE1,k),zetca1(IICE1,k),0) !P-P
-
-            dvtc(2) = delta_vtm_seifert(vtn1(IICE2,k),bet_area(IICE2),betac(IICE2),&
-                      betvt1(IICE2,k),vtn1(IICE2,k),bet_area(IICE2),betvt1(IICE2,k),&
-                      zetba1(IICE2,k),zetca1(IICE2,k),0) !C-C
-
-            dvtc(3) = delta_vtm_seifert(vtn1(IICE1,k),bet_area(IICE1),betac(IICE1),&
-                      betvt1(IICE1,k),vtn1(IICE2,k),bet_area(IICE2),betvt1(IICE2,k),&
-                      zetba1(IICE2,k),zetca1(IICE2,k),0) !P-C
-
-            dvtc(4) = delta_vtm_seifert(vtn1(IICE1,k),bet_area(IICE1),betac(IICE1),&
-                      betvt1(IICE1,k),vtn1(IICE3,k),bet_area(IICE3),betvt1(IICE3,k),&
-                      zetba1(IICE3,k),zetca1(IICE3,k),1) !C-P
-
-            dvtc(5) = delta_vtm_seifert(vtn1(IICE1,k),bet_area(IICE1),betac(IICE1),&
-                      betvt1(IICE1,k),vtn1(IICE3,k),bet_area(IICE3),betvt1(IICE3,k),&
-                      zetba1(IICE3,k),zetca1(IICE3,k),1) !P-A
-
-            dvtc(6) = delta_vtm_seifert(vtn1(IICE2,k),bet_area(IICE2),betac(IICE2),&
-                      betvt1(IICE2,k),vtn1(IICE3,k),bet_area(IICE3),betvt1(IICE3,k),&
-                      zetba1(IICE3,k),zetca1(IICE3,k),1) !C-A
-
-
-
-            dvtn(1) = delta_vtm_seifert(vtn1(IICE1,k),bet_area(IICE1),0.,&
-                      betvt1(IICE1,k),vtn1(IICE1,k),bet_area(IICE1),betvt1(IICE1,k),&
-                      zetba1(IICE1,k),zetca1(IICE1,k),0) ! P-P
-
-            dvtn(2) = delta_vtm_seifert(vtn1(IICE2,k),bet_area(IICE2),0.,&
-                      betvt1(IICE2,k),vtn1(IICE2,k),bet_area(IICE2),betvt1(IICE2,k),&
-                      zetba1(IICE2,k),zetca1(IICE2,k),0) !C-C
-
-            dvtn(3) = delta_vtm_seifert(vtn1(IICE1,k),bet_area(IICE1),0.,&
-                      betvt1(IICE1,k),vtn1(IICE2,k),bet_area(IICE2),betvt1(IICE2,k),&
-                      zetba1(IICE2,k),zetca1(IICE2,k),0) ! P-C
-
-            dvtn(4) = delta_vtm_seifert(vtn1(IICE1,k),bet_area(IICE1),0.,&
-                      betvt1(IICE1,k),vtn1(IICE3,k),bet_area(IICE3),betvt1(IICE3,k),&
-                      zetba1(IICE3,k),zetca1(IICE3,k),1) ! P-A
-
-            dvtn(5) = delta_vtm_seifert(vtn1(IICE2,k),bet_area(IICE2),0.,&
-                      betvt1(IICE2,k),vtn1(IICE3,k),bet_area(IICE3),betvt1(IICE3,k),&
-                      zetba1(IICE3,k),zetca1(IICE3,k),1) ! C-A
-
-            dvtn(6) = delta_vtm_seifert(vtn1(IICE3,k),bet_area(IICE3),0.,&
-                      betvt1(IICE3,k),vtn1(IICE3,k),bet_area(IICE3),betvt1(IICE3,k),&
-                      zetba1(IICE3,k),zetca1(IICE3,k),2) ! A-A
-
-
-
-
-            endif
-
-
                 
-  !.. Ice-1 and ice-2 mass (volume), number, and aspect ratio-weighted volume (Vc)
-  !.. loss to aggregates occurs inside of aggregation
+  !.. Ice-1 and ice-2 mass and number loss to aggregates occurs inside of aggregation
   !.. After aggregation, ice-1 and ice-2 bulk distribution properties are adjusted 
-  !.. according the new mass, volumes, and number mixing ratios (shape_diag).
-
-             if(qi(IICE1,k).gt.1.e-8.or.qi(IICE2,k).gt.1.e-8.or.qi(IICE3,k).gt.1.e-8) then
-
-                call starbuck(rhoair(k),temp,phiagg1,phiagg2,rhobar(IICE1),rhobar(IICE2),qi(IICE1,k),Viadum(IICE1),Vicdum(IICE1), &
-                              ni(IICE1,k),an1,alph_area(IICE1),bet_area(IICE1),alph_v(IICE1),alph_m(IICE1),bet_m(IICE1),alphc(IICE1),&
-                              betac(IICE1),qi(IICE2,k),Viadum(IICE2),Vicdum(IICE2),ni(IICE2,k),an2,alph_area(IICE2),bet_area(IICE2),&
-                              alph_v(IICE2),alph_m(IICE2),bet_m(IICE2),alphc(IICE2),betac(IICE2),qi(IICE3,k),Viadum(IICE3),&
-                              Vicdum(IICE3),ni(IICE3,k),an3,alph_area(IICE3),bet_area(IICE3),dvtn,dvtm,dvtc,qagg(IICE1),&
-                              qagg(IICE2),qagg(IICE3),nagg(IICE1),nagg(IICE2),nagg(IICE3),nmon3,Vagg(IICE1),Vagg(IICE2),Vagg(IICE3),&
-                              Vcagg(IICE1),Vcagg(IICE2),Vcagg(IICE3))
-
-
-
+  !.. assuming that aggregation did not cause the original shape and density of the
+  !.. unaggregated particles to change
+             if(qi(ICE1,k).gt.1.e-8.or.qi(ICE2,k).gt.1.e-8.or.qi(ICE3,k).gt.1.e-8) then
+                call aggregation(dt,rhoair(k),temp,qi(ICE1,k),ni(ICE1,k),dn1,qi(ICE2,k),ni(ICE2,k),dn2,  &
+                     qi(ICE3,k),ni(ICE3,k),dn3,rhobar(ICE1),rhobar(ICE2),phiagg1,phiagg2,coltab,         &
+                     coltabn,qagg(ICE1),qagg(ICE2),qagg(ICE3),nagg(ICE1),nagg(ICE2),nagg(ICE3))
              endif  !.. If ice mass mixing ratios are high enough to aggregate
           endif
-        endif !.. If aggregation
           
   !--------------------------------------------------------------------------------------------------------------!
   !--------------------------------------------------------------------------------------------------------------!
@@ -2164,134 +1699,134 @@ contains
   !.. Ice 
           if(igr.le.1.) then !.. Nucleation initiation to ice 1
   !.. Ice 1 
-             sink  =(-qmlt(IICE1)-qagg(IICE1))*dt
-             source=qi(IICE1,k) + (prdr(IICE1))*dt
-             if(prd(IICE1).gt.0.) then
-                source = source + prd(IICE1)*dt
+             sink  =(-qmlt(ICE1)-qagg(ICE1))*dt
+             source=qi(ICE1,k) + (prdr(ICE1))*dt
+             if(prd(ICE1).gt.0.) then
+                source = source + prd(ICE1)*dt
              else
-                sink = sink + (-prd(IICE1))*dt
+                sink = sink + (-prd(ICE1))*dt
              endif
 
   !.. Added because of ice initiation to ice 1
-             source = source + (mnuccd+mim+mimr+mbiggr+dQIfzri(IICE2)+dQIfzri(IICE3))*dt
+             source = source + (mnuccd+mim+mimr+mbiggr+dQIfzri(ICE2)+dQIfzri(ICE3))*dt
              do cc = 1, cat
                 source = source + (qmult(cc)+dQRfzri(cc))*dt
              enddo
 
-             if(sink.gt.source.and.qi(IICE1,k).gt.QSMALL) then
+             if(sink.gt.source.and.qi(ICE1,k).gt.QSMALL) then
                 ratio= source/sink
-                qmlt(IICE1) = qmlt(IICE1)*ratio
-                qagg(IICE1) = qagg(IICE1)*ratio
-                nagg(IICE1) = nagg(IICE1)*ratio
-                if(prd(IICE1).lt.0.) then
-                   prd(IICE1) = prd(IICE1)*ratio
+                qmlt(ICE1) = qmlt(ICE1)*ratio
+                qagg(ICE1) = qagg(ICE1)*ratio
+                nagg(ICE1) = nagg(ICE1)*ratio
+                if(prd(ICE1).lt.0.) then
+                   prd(ICE1) = prd(ICE1)*ratio
                 endif
              endif
 
   !.. Ice 2
-             sink  =(dQIfzri(IICE2)-qmlt(IICE2)-qagg(IICE2))*dt
-             source=qi(IICE2,k) + (prdr(IICE2))*dt
-             if(prd(IICE2).gt.0.) then
-                source = source + prd(IICE2)*dt
+             sink  =(dQIfzri(ICE2)-qmlt(ICE2)-qagg(ICE2))*dt
+             source=qi(ICE2,k) + (prdr(ICE2))*dt
+             if(prd(ICE2).gt.0.) then
+                source = source + prd(ICE2)*dt
              else
-                sink = sink + (-prd(IICE2))*dt
+                sink = sink + (-prd(ICE2))*dt
              endif
 
-             if(sink.gt.source.and.qi(IICE2,k).gt.QSMALL) then
+             if(sink.gt.source.and.qi(ICE2,k).gt.QSMALL) then
                 ratio= source/sink
-                dQIfzri(IICE2) = dQIfzri(IICE2)*ratio
-                dQRfzri(IICE2) = dQRfzri(IICE2)*ratio
-                dNfzri(IICE2)  = dNfzri(IICE2)*ratio
-                qmlt(IICE2) = qmlt(IICE2)*ratio
-                qagg(IICE2) = qagg(IICE2)*ratio
-                nagg(IICE2) = nagg(IICE2)*ratio
-                if(prd(IICE2).lt.0.) then
-                   prd(IICE2) = prd(IICE2)*ratio
+                dQIfzri(ICE2) = dQIfzri(ICE2)*ratio
+                dQRfzri(ICE2) = dQRfzri(ICE2)*ratio
+                dNfzri(ICE2)  = dNfzri(ICE2)*ratio
+                qmlt(ICE2) = qmlt(ICE2)*ratio
+                qagg(ICE2) = qagg(ICE2)*ratio
+                nagg(ICE2) = nagg(ICE2)*ratio
+                if(prd(ICE2).lt.0.) then
+                   prd(ICE2) = prd(ICE2)*ratio
                 endif
              endif
   !.. Ice 3
-             sink  =(dQIfzri(IICE3)-qmlt(IICE3))*dt
-             source=qi(IICE3,k) + (prdr(IICE3)+qagg(IICE3))*dt
-             if(prd(IICE3).gt.0.) then
-                source = source + prd(IICE3)*dt
+             sink  =(dQIfzri(ICE3)-qmlt(ICE3))*dt
+             source=qi(ICE3,k) + (prdr(ICE3)+qagg(ICE3))*dt
+             if(prd(ICE3).gt.0.) then
+                source = source + prd(ICE3)*dt
              else
-                sink = sink + (-prd(IICE3))*dt
+                sink = sink + (-prd(ICE3))*dt
              endif
 
-             if(sink.gt.source.and.qi(IICE3,k).gt.QSMALL) then
+             if(sink.gt.source.and.qi(ICE3,k).gt.QSMALL) then
                 ratio= source/sink
-                dQIfzri(IICE3) = dQIfzri(IICE3)*ratio
-                dQRfzri(IICE3) = dQRfzri(IICE3)*ratio
-                dNfzri(IICE3)  = dNfzri(IICE3)*ratio
-                qmlt(IICE3) = qmlt(IICE3)*ratio
-                if(prd(IICE3).lt.0.) then
-                   prd(IICE3) = prd(IICE3)*ratio
+                dQIfzri(ICE3) = dQIfzri(ICE3)*ratio
+                dQRfzri(ICE3) = dQRfzri(ICE3)*ratio
+                dNfzri(ICE3)  = dNfzri(ICE3)*ratio
+                qmlt(ICE3) = qmlt(ICE3)*ratio
+                if(prd(ICE3).lt.0.) then
+                   prd(ICE3) = prd(ICE3)*ratio
                 endif
              endif
           else !.. nucleation to ice 2
   !.. Ice 2 
-             sink  =(-qmlt(IICE2)-qagg(IICE2))*dt
-             source=qi(IICE2,k) + (prdr(IICE2))*dt
-             if(prd(IICE2).gt.0.) then
-                source = source + prd(IICE2)*dt
+             sink  =(-qmlt(ICE2)-qagg(ICE2))*dt
+             source=qi(ICE2,k) + (prdr(ICE2))*dt
+             if(prd(ICE2).gt.0.) then
+                source = source + prd(ICE2)*dt
              else
-                sink = sink + (-prd(IICE2))*dt
+                sink = sink + (-prd(ICE2))*dt
              endif
 
   !.. Added because of ice initiation to ice 2
-             source = source + (mnuccd+mim+mimr+mbiggr+dQIfzri(IICE1)+dQIfzri(IICE3))*dt
+             source = source + (mnuccd+mim+mimr+mbiggr+dQIfzri(ICE1)+dQIfzri(ICE3))*dt
              do cc = 1, cat
                 source = source + (qmult(cc)+dQRfzri(cc))*dt
              enddo
 
-             if(sink.gt.source.and.qi(IICE2,k).gt.QSMALL) then
+             if(sink.gt.source.and.qi(ICE2,k).gt.QSMALL) then
                 ratio= source/sink
-                qmlt(IICE2) = qmlt(IICE2)*ratio
-                qagg(IICE2) = qagg(IICE2)*ratio
-                nagg(IICE2) = nagg(IICE2)*ratio
-                if(prd(IICE2).lt.0.) then
-                   prd(IICE2) = prd(IICE2)*ratio
+                qmlt(ICE2) = qmlt(ICE2)*ratio
+                qagg(ICE2) = qagg(ICE2)*ratio
+                nagg(ICE2) = nagg(ICE2)*ratio
+                if(prd(ICE2).lt.0.) then
+                   prd(ICE2) = prd(ICE2)*ratio
                 endif
              endif
 
   !.. Ice 1
-             sink  =(dQIfzri(IICE1)-qmlt(IICE1)-qagg(IICE1))*dt
-             source=qi(IICE1,k) + (prdr(IICE1))*dt
-             if(prd(IICE1).gt.0.) then
-                source = source + prd(IICE1)*dt
+             sink  =(dQIfzri(ICE1)-qmlt(ICE1)-qagg(ICE1))*dt
+             source=qi(ICE1,k) + (prdr(ICE1))*dt
+             if(prd(ICE1).gt.0.) then
+                source = source + prd(ICE1)*dt
              else
-                sink = sink + (-prd(IICE1))*dt
+                sink = sink + (-prd(ICE1))*dt
              endif
 
-             if(sink.gt.source.and.qi(IICE1,k).gt.QSMALL) then
+             if(sink.gt.source.and.qi(ICE1,k).gt.QSMALL) then
                 ratio= source/sink
-                dQIfzri(IICE1) = dQIfzri(IICE1)*ratio
-                dQRfzri(IICE1) = dQRfzri(IICE1)*ratio
-                dNfzri(IICE1)  = dNfzri(IICE1)*ratio
-                qmlt(IICE1) = qmlt(IICE1)*ratio
-                qagg(IICE1) = qagg(IICE1)*ratio
-                nagg(IICE1) = nagg(IICE1)*ratio
-                if(prd(IICE1).lt.0.) then
-                   prd(IICE1) = prd(IICE1)*ratio
+                dQIfzri(ICE1) = dQIfzri(ICE1)*ratio
+                dQRfzri(ICE1) = dQRfzri(ICE1)*ratio
+                dNfzri(ICE1)  = dNfzri(ICE1)*ratio
+                qmlt(ICE1) = qmlt(ICE1)*ratio
+                qagg(ICE1) = qagg(ICE1)*ratio
+                nagg(ICE1) = nagg(ICE1)*ratio
+                if(prd(ICE1).lt.0.) then
+                   prd(ICE1) = prd(ICE1)*ratio
                 endif
              endif
   !.. Ice 3
-             sink  =(dQIfzri(IICE3)-qmlt(IICE3))*dt
-             source=qi(IICE3,k) + (prdr(IICE3)+qagg(IICE3))*dt
-             if(prd(IICE3).gt.0.) then
-                source = source + prd(IICE3)*dt
+             sink  =(dQIfzri(ICE3)-qmlt(ICE3))*dt
+             source=qi(ICE3,k) + (prdr(ICE3)+qagg(ICE3))*dt
+             if(prd(ICE3).gt.0.) then
+                source = source + prd(ICE3)*dt
              else
-                sink = sink + (-prd(IICE3))*dt
+                sink = sink + (-prd(ICE3))*dt
              endif
 
-             if(sink.gt.source.and.qi(IICE3,k).gt.QSMALL) then
+             if(sink.gt.source.and.qi(ICE3,k).gt.QSMALL) then
                 ratio= source/sink
-                dQIfzri(IICE3) = dQIfzri(IICE3)*ratio
-                dQRfzri(IICE3) = dQRfzri(IICE3)*ratio
-                dNfzri(IICE3)  = dNfzri(IICE3)*ratio
-                qmlt(IICE3) = qmlt(IICE3)*ratio
-                if(prd(IICE3).lt.0.) then
-                   prd(IICE3) = prd(IICE3)*ratio
+                dQIfzri(ICE3) = dQIfzri(ICE3)*ratio
+                dQRfzri(ICE3) = dQRfzri(ICE3)*ratio
+                dNfzri(ICE3)  = dNfzri(ICE3)*ratio
+                qmlt(ICE3) = qmlt(ICE3)*ratio
+                if(prd(ICE3).lt.0.) then
+                   prd(ICE3) = prd(ICE3)*ratio
                 endif
              endif
           endif
@@ -2316,48 +1851,25 @@ contains
           do cc = 1, cat
 
   !.. Vapor growth update
-             if (cc.ne.IICE3) then
              if((qi(cc,k)+(prd(cc))*dt).gt.QSMALL.and.qi(cc,k).gt.QSMALL) then
                 rhobar(cc) = rhobar(cc)*(qi(cc,k)/(qi(cc,k)+(prd(cc))*dt)) + &
                      rhodepout(cc)*(1.-(qi(cc,k)/(qi(cc,k)+(prd(cc))*dt)))
              else
                 rhobar(cc) = RHOI
              endif
-
-            endif
-
-
-            if (cc.ne.IICE3) then
-
              qi(cc,k)=qi(cc,k)+(prd(cc))*dt
              ni(cc,k)=ni(cc,k)+(nrd(cc))*dt
              ai(cc,k)=ai(cc,k)+(ard(cc))*dt
              ci(cc,k)=ci(cc,k)+(crd(cc))*dt
-
-            elseif(cc.eq.IICE3) then
-
-             Nmonb = max(nmon(k)/ni(cc,k),2.) ! Temp store of avg. mon number
-             qi(cc,k)=qi(cc,k)+(prd(cc))*dt
-             ni(cc,k)=ni(cc,k)+(nrd(cc))*dt
-
-             nmon(k)=ni(cc,k)*Nmonb ! Re-diagnose number of monomers keeping Nmon_avg const.
-
-             endif
-
              
              ni(cc,k) = max(ni(cc,k),QNSMALL)
-             nmon(k) = max(nmon(k),2.*QNSMALL)
              ai(cc,k) = max(ai(cc,k),QASMALL)
              ci(cc,k) = max(ci(cc,k),QASMALL)
-
-
-
              
   !.. If vapor growth of ice is going to cause
   !.. subsaturated condtions, reduce vapor growth
   !.. rates (done above) and rediagnose the axes
              if(vgflag.and.qi(cc,k).gt.QSMALL) then
-                if (cc.ne.IICE3) then
                 alphstr=ao**(1.-deltastr(cc))
                 alphv=fourthirdspi*alphstr
                 betam=2.+deltastr(cc)
@@ -2368,24 +1880,12 @@ contains
                 cni(cc)=ao**(1.-deltastr(cc))*ani(cc)**deltastr(cc)
                 ai(cc,k)=ani(cc)**2*cni(cc)*ni(cc,k)
                 ci(cc,k)=cni(cc)**2*ani(cc)*ni(cc,k)
-
-                else
-
-                call var_check_agg(fourthirdspi,qi(cc,k),ni(cc,k),ani(cc),rhobar(cc))
-                alphm_agg = (qi(cc,k)/ni(cc,k))*(1./phiba_phica_bar)*ani(cc)**(-betm_agg)*gamma(NU_AGG)/gamma(NU_AGG+betm_agg)
-
-
-                endif
-
              endif
           enddo
 
   !.. Update to ice
           do cc = 1, cat
   !.. Riming update
-
-             if (cc.ne.IICE3) then
-
              if((qi(cc,k)+(prdr(cc))*dt).gt.QSMALL) then
                 if(dry_growth(cc)) then
                    rhobar(cc) = rhobar(cc)*(qi(cc,k)/(qi(cc,k)+(prdr(cc))*dt)) + &
@@ -2398,18 +1898,16 @@ contains
              else
                 rhobar(cc) = RHOI
              endif
-
+             
              qi(cc,k)=qi(cc,k)+(prdr(cc))*dt
              ai(cc,k)=ai(cc,k)+(ardr(cc))*dt
              ci(cc,k)=ci(cc,k)+(crdr(cc))*dt
-
-             endif
 
           enddo
 
   !.. Keep everything in bounds after vapor growth and riming
           do cc = 1, cat
-             if(qi(cc,k).gt.QSMALL.and.cc.ne.IICE3) then
+             if(qi(cc,k).gt.QSMALL) then
                 ni(cc,k)=max(ni(cc,k),QNSMALL)
                 ai(cc,k)=max(ai(cc,k),QASMALL)
                 ci(cc,k)=max(ci(cc,k),QASMALL)
@@ -2421,21 +1919,11 @@ contains
 
                 deltastr(cc)=(log(cni(cc))-log(ao))/(log(ani(cc))-log(ao))
                    
-                call var_check(fourthirdspi, gammnu, qi(cc,k), deltastr(cc),       &
+                call var_check(NU, ao, fourthirdspi, gammnu, qi(cc,k), deltastr(cc),       &
                      ani(cc), cni(cc), rni(cc), rhobar(cc), ni(cc,k), ai(cc,k), ci(cc,k),  &
                      alphstr, alphv, betam)
 
                 dsold(cc) = deltastr(cc)
-
-            elseif (cc.eq.IICE3) then
-
-                ni(cc,k)=max(ni(cc,k),QNSMALL)
-                nmon(k)=max(nmon(k),2.*QNSMALL)
-
-                call var_check_agg(fourthirdspi,qi(cc,k),ni(cc,k),ani(cc),rhobar(cc))
-
-                alphm_agg = (qi(cc,k)/ni(cc,k))*(1./phiba_phica_bar)*ani(cc)**(-betm_agg)*gamma(NU_AGG)/gamma(NU_AGG+betm_agg)
-
              endif
           enddo
 
@@ -2445,7 +1933,6 @@ contains
           if(temp.gt.T0) then
              do cc = 1, cat
 
-                if (cc.ne.IICE3) then
                 if(qi(cc,k).gt.QSMALL) then
                    rhobar(cc) = rhobar(cc)*((qi(cc,k)+(qmlt(cc))*dt)/qi(cc,k)) + &
                         RHOW*((-qmlt(cc)*dt)/qi(cc,k))
@@ -2453,24 +1940,11 @@ contains
                 else
                    rhobar(cc) = RHOI
                 endif
-                endif
-
-
 
                 qi(cc,k)=qi(cc,k)+qmlt(cc)*dt
+                ni(cc,k)=ni(cc,k)+nmlt(cc)*dt
                 ai(cc,k)=ai(cc,k)+amlt(cc)*dt
                 ci(cc,k)=ci(cc,k)+cmlt(cc)*dt
-
-
-                if (cc.ne.IICE3) then
-                ni(cc,k)=ni(cc,k)+nmlt(cc)*dt
-                elseif (cc.eq.IICE3) then
-                Nmonb = max(nmon(k)/ni(cc,k),2.)
-                ni(cc,k)=ni(cc,k)+nmlt(cc)*dt
-                nmon(k)=Nmonb*ni(cc,k)
-                endif
-
-
                 
   !.. Small masses of leftover ice can become rain
                 if(qi(cc,k).le.QSMALL) then
@@ -2478,8 +1952,8 @@ contains
                    qi(cc,k)=0.
                 endif
                 
-  !.. Keep everything in bounds after melting
-               if(qi(cc,k).gt.QSMALL.and.cc.ne.IICE3) then
+  !.. Keep everyting in bounds after melting
+                if(qi(cc,k).gt.QSMALL) then
                    ni(cc,k)=max(ni(cc,k),QNSMALL)
                    ai(cc,k)=max(ai(cc,k),QASMALL)
                    ci(cc,k)=max(ci(cc,k),QASMALL)
@@ -2511,15 +1985,11 @@ contains
                    ai(cc,k)=ani(cc)**2*cni(cc)*ni(cc,k)
                    ci(cc,k)=cni(cc)**2*ani(cc)*ni(cc,k)
 
-                   call var_check(fourthirdspi, gammnu, qi(cc,k), deltastr(cc),       &
+                   call var_check(NU, ao, fourthirdspi, gammnu, qi(cc,k), deltastr(cc),       &
                         ani(cc), cni(cc), rni(cc), rhobar(cc), ni(cc,k), ai(cc,k), ci(cc,k),  &
                         alphstr, alphv, betam)
 
                    dsold(cc) = deltastr(cc)
-
-              elseif(qi(cc,k).gt.QSMALL.and.cc.eq.IICE3) then
-                call var_check_agg(fourthirdspi,qi(cc,k),ni(cc,k),ani(cc),rhobar(cc))
-                alphm_agg = (qi(cc,k)/ni(cc,k))*(1./phiba_phica_bar)*ani(cc)**(-betm_agg)*gamma(NU_AGG)/gamma(NU_AGG+betm_agg)
                 endif  !.. End if ice exists after melting
              enddo     !.. Loop over all ices species
           endif        !.. End temperature above melting
@@ -2554,65 +2024,52 @@ contains
           enddo
 
           if(igr.le.1.) then
-  !.. Nucleation to IICE1 (planar-nuclated)
-             totalnuc(IICE1) =(mnuccd+mim+mimr+mbiggr+dQIfzri(IICE2)+dQIfzri(IICE3))*dt
-             totalnucn(IICE1)=(nnuccd+nim+nimr+nbiggr+dNfzri(IICE2)+dNfzri(IICE3))*dt
+  !.. Nucleation to ice1 (planar-nuclated)
+             totalnuc(ICE1) =(mnuccd+mim+mimr+mbiggr+dQIfzri(ICE2)+dQIfzri(ICE3))*dt
+             totalnucn(ICE1)=(nnuccd+nim+nimr+nbiggr+dNfzri(ICE2)+dNfzri(ICE3))*dt                  
 
              do cc = 1, cat
-                totalnuc(IICE1) =totalnuc(IICE1)  + (qmult(cc)+dQRfzri(cc))*dt
-                totalnucn(IICE1)=totalnucn(IICE1) + (nmult(cc))*dt
+                totalnuc(ICE1) =totalnuc(ICE1)  + (qmult(cc)+dQRfzri(cc))*dt
+                totalnucn(ICE1)=totalnucn(ICE1) + (nmult(cc))*dt                  
              enddo
 
-             qi(IICE1,k)=qi(IICE1,k)+totalnuc(IICE1)
-             ni(IICE1,k)=ni(IICE1,k)+totalnucn(IICE1)
+             qi(ICE1,k)=qi(ICE1,k)+totalnuc(ICE1)
+             ni(ICE1,k)=ni(ICE1,k)+totalnucn(ICE1)
 
-  !.. Loss of IICE2 from IICE2-rain producing IICE1
-             qi(IICE2,k)=qi(IICE2,k)-(dQIfzri(IICE2))*dt
-             ni(IICE2,k)=ni(IICE2,k)-(dNfzri(IICE2))*dt
+  !.. Loss of ice2 from ice2-rain producing ice1
+             qi(ICE2,k)=qi(ICE2,k)-(dQIfzri(ICE2))*dt
+             ni(ICE2,k)=ni(ICE2,k)-(dNfzri(ICE2))*dt
 
-  !.. Loss of IICE3 from IICE3-rain producing IICE1
-             qi(IICE3,k)=qi(IICE3,k)-(dQIfzri(IICE3))*dt
-             Nmonb = max(nmon(k)/ni(IICE3,k),2.)
-             ni(IICE3,k)=ni(IICE3,k)-(dNfzri(IICE3))*dt
-             nmon(k) = ni(IICE3,k)*Nmonb
+  !.. Loss of ice3 from ice3-rain producing ice1
+             qi(ICE3,k)=qi(ICE3,k)-(dQIfzri(ICE3))*dt
+             ni(ICE3,k)=ni(ICE3,k)-(dNfzri(ICE3))*dt
           else
 
-  !.. Nucleation to IICE2 (columnar-nucleated)
-             totalnuc(IICE2) =(mnuccd+mim+mimr+mbiggr+dQIfzri(IICE1)+dQIfzri(IICE3))*dt
-             totalnucn(IICE2)=(nnuccd+nim+nimr+nbiggr+dNfzri(IICE1)+dNfzri(IICE3))*dt
+  !.. Nucleation to ice2 (columnar-nucleated)
+             totalnuc(ICE2) =(mnuccd+mim+mimr+mbiggr+dQIfzri(ICE1)+dQIfzri(ICE3))*dt
+             totalnucn(ICE2)=(nnuccd+nim+nimr+nbiggr+dNfzri(ICE1)+dNfzri(ICE3))*dt                  
 
              do cc = 1, cat
-                totalnuc(IICE2) =totalnuc(IICE2)  + (qmult(cc)+dQRfzri(cc))*dt
-                totalnucn(IICE2)=totalnucn(IICE2) + (nmult(cc))*dt
+                totalnuc(ICE2) =totalnuc(ICE2)  + (qmult(cc)+dQRfzri(cc))*dt
+                totalnucn(ICE2)=totalnucn(ICE2) + (nmult(cc))*dt                  
              enddo
 
-             qi(IICE2,k)=qi(IICE2,k)+totalnuc(IICE2)
-             ni(IICE2,k)=ni(IICE2,k)+totalnucn(IICE2)
+             qi(ICE2,k)=qi(ICE2,k)+totalnuc(ICE2)
+             ni(ICE2,k)=ni(ICE2,k)+totalnucn(ICE2)
 
-  !.. Loss of IICE1 from IICE1-rain producing IICE2
-             qi(IICE1,k)=qi(IICE1,k)-(dQIfzri(IICE1))*dt
-             ni(IICE1,k)=ni(IICE1,k)-(dNfzri(IICE1))*dt
+  !.. Loss of ice1 from ice1-rain producing ice2
+             qi(ICE1,k)=qi(ICE1,k)-(dQIfzri(ICE1))*dt
+             ni(ICE1,k)=ni(ICE1,k)-(dNfzri(ICE1))*dt
 
-  !.. Loss of IICE3 from IICE3-rain producing IICE2
-             qi(IICE3,k)=qi(IICE3,k)-(dQIfzri(IICE3))*dt
-             Nmonb = max(nmon(k)/ni(IICE3,k),2.)
-             ni(IICE3,k)=ni(IICE3,k)-(dNfzri(IICE3))*dt
-             nmon(k) = ni(IICE3,k)*Nmonb
+  !.. Loss of ice3 from ice3-rain producing ice2
+             qi(ICE3,k)=qi(ICE3,k)-(dQIfzri(ICE3))*dt
+             ni(ICE3,k)=ni(ICE3,k)-(dNfzri(ICE3))*dt
 
           endif
 
   !.. Limit ice number concentrations to 1000/L
           do cc = 1, cat
-             if (cc.ne.IICE3) then
              ni(cc,k)=min(ni(cc,k),(1000.*1000.*i_rhoair(k)))
-
-             elseif (cc.eq.IICE3) then
-             Nmonb = max(nmon(k)/ni(cc,k),2.)
-             ni(cc,k)=min(ni(cc,k),(1000.*1000.*i_rhoair(k)))
-             nmon(k) = ni(cc,k)*Nmonb
-
-             endif
-
           enddo
 
   !.. Final check on rain and fall speed calculation
@@ -2658,12 +2115,9 @@ contains
                 nucfrac = max(nucfrac, 0.0)
 
   !.. Do not nucleate to aggregates
-                if(cc.eq.IICE3) then
+                if(cc.eq.ICE3) then
                    nucfrac=0.
                 endif
-
-  !.. PUT IN NEW METHODOLOGY FOR NUCLEATION AND AGGREGATION
-
                 
   !.. Update density from nucleation
                 rhobar(cc) = RHOI*nucfrac + (1.-nucfrac)*rhobar(cc)
@@ -2692,16 +2146,6 @@ contains
                         gamma_tab(gi)))**0.3333333)*gamma_tab(gi2)/gamma_tab(gi)
                    anuc = MAX(anuc,2.e-6)
                    anuc = MIN(anuc,3.e-3)
-
-                    ! Shape_diag takes in the new volumes, mass, and number and calculates deltastar and ani (cni)
-
-                    ! Calculate new volumes
-                    ! cnuc =
-                    ! anuc = cnuc/phinuc
-                    ! Vanuc = fourthirdspi*anuc**3*phinuc*totalnucn(cc)
-
-                    !  call shape_diag(NU,gammnu,ni(cc,k),qi(cc,k),Viadum,Vicdum,ao,deltastr(cc),alphstr,alphv,betam,&
-                    !  ai(cc,k),ci(cc,k),ani,cni)
                    
                    gamma_arg = NU+2.+deltastr(cc)
                    gi=MIN((MAX((NINT((gamma_arg*100000.)-355000+1)),1)),505001)
@@ -2744,24 +2188,16 @@ contains
                          deltastr(cc)=1.
                       endif
                    endif
-
-
-
-
-
-
                 endif    !.. End nucleation update distribution properties
 
   !--------------------------------------------------------------------------------------------------------------!
   !--------------------------------------------------------------------------------------------------------------!
   !.. This needs to be done because of transfer from e.g.
-  !.. IICE1 to IICE2 during nucleation.
+  !.. ice1 to ice2 during nucleation.
   !.. Assume constant density/delta*, loss of mass and number
 
   !..With the new delta* and density after nucleation re-diagnose a and c           
   !..Use the old density and deltastr for loss values e.g. q1 = q1 - (transfered to q2)
-
-                if(cc.ne.IICE3) then
 
                 alphstr=ao**(1.-deltastr(cc))
                 alphv=fourthirdspi*alphstr
@@ -2781,33 +2217,22 @@ contains
                      nibnuc(cc)*cniold(cc)**2*(ani(cc)-aniold(cc)) + &
                      cniold(cc)**2*aniold(cc)*(ni(cc,k)-nibnuc(cc))
 
-                endif
-
   !.. Keep everything in bounds
                 ni(cc,k)=max(ni(cc,k),QNSMALL)
                 ai(cc,k)=max(ai(cc,k),QASMALL)
                 ci(cc,k)=max(ci(cc,k),QASMALL)
-
-                if (cc.ne.IICE3) then
+                
                 if(ani(cc).gt.(1.1*ao).and.cni(cc).gt.(1.1*ao)) then
                    deltastr(cc)=(log(cni(cc))-log(ao))/(log(ani(cc))-log(ao)) 
                 else
                    deltastr(cc)=1.
                 endif
                 
-                call var_check(fourthirdspi, gammnu, qi(cc,k), deltastr(cc),       &
+                call var_check(NU, ao, fourthirdspi, gammnu, qi(cc,k), deltastr(cc),       &
                      ani(cc), cni(cc), rni(cc), rhobar(cc), ni(cc,k), ai(cc,k), ci(cc,k),  &
                      alphstr, alphv, betam)
 
                 dsold(cc) = deltastr(cc)
-
-                elseif (cc.eq.IICE3) then
-
-
-                call var_check_agg(fourthirdspi,qi(cc,k),ni(cc,k),ani(cc),rhobar(cc))
-
-
-                endif
 
   !.. Limit the fall speeds here to 25 m s^-1
                 vtrzi1(cc,k)=min(vtrzi1(cc,k),25.)
@@ -2822,9 +2247,6 @@ contains
                 qi(cc,k)=0.
                 ai(cc,k)=0.
                 ni(cc,k)=0.
-                if (cc.eq.IICE3) then
-                nmon(k)=0.
-                endif
                 ci(cc,k)=0.
                 vtrzi1(cc,k)=0.
                 vtrmi1(cc,k)=0.
@@ -2834,186 +2256,99 @@ contains
 
   !--------------------------------------------------------------------------------------------------------------!
   !--------------------------------------------------------------------------------------------------------------!
-          if(temp.le.T0.and.AGGREGATION) then
+          if(temp.le.T0) then  
   !.. Aggregation occurs similarly to nulceation
-  !.. We assume that the loss of IICE1 and IICE2 to aggregates does not
-  !.. change the shape and density of the remaining particles.
-
-             ! Transfer
-             nmon(k) = nmon(k) + nmon3*dt
-             nmon(k) = max(nmon(k),2.*QNSMALL)
-
+  !.. We assume that the loss of ice1 and ice2 to aggregates does 
+  !.. not significantly change the shape and density of the 
+  !.. remaining particles. Both ani and cni are updated 
+  !.. with no change to density and delta*. 
+  !.. Aggregation (see Jensen et al. 2017, 2018a, 2018b)
              do cc = 1, cat
-
-                if (cc.ne.IICE3) then
-                if(ani(cc).gt.(1.1*ao).and.cni(cc).gt.(1.1*ao)) then
-                deltastr(cc)=(log(cni(cc))-log(ao))/(log(ani(cc))-log(ao))
-                else
-                deltastr(cc)=1.
-                endif
-
-                call var_check(fourthirdspi, gammnu, qi(cc,k), deltastr(cc),       &
-                ani(cc), cni(cc), rni(cc), rhobar(cc), ni(cc,k), ai(cc,k), ci(cc,k),  &
-                alphstr, alphv, betam)
-
                 dsold(cc) = deltastr(cc)
-
-                alph_v(cc) = fourthirdspi*alphstr
-                bet_m(cc) = 2.+deltastr(cc)
-                alphc(cc) = fourthirdspi*alphstr**2
-                betac(cc) = 1.+2.*deltastr(cc)
-
-
-                Viadum(cc) = alph_v(cc)*ani(cc)**betam*ni(cc,k)*gamma(NU+betam)/gammnu
-                Vicdum(cc) = alphc(cc)*ani(cc)**betac(cc)*ni(cc,k)*gamma(NU+betac(cc))/gammnu
-
-                endif
-
                 nibnuc(cc) = max(ni(cc,k),QNSMALL)
-
-                qi(cc,k) = qi(cc,k) + qagg(cc)*dt
-                ni(cc,k) = ni(cc,k) + nagg(cc)*dt
-                Viadum(cc) = Viadum(cc)+vagg(cc)*dt
-                Vicdum(cc) = Vicdum(cc)+vcagg(cc)*dt
-
-                if (cc.ne.IICE3.and.ni(cc,k).gt.QNSMALL.and.qi(cc,k).gt.QSMALL) then
-
-
-
-                !if (ani(cc).gt.2.e-3) then
-                !print*, 'ds_before=',deltastr(cc)
-                !print*, 'ni_before=',ni(cc,k)
-                !print*, 'qi_before=',qi(cc,k)
-                !print*, 'ani_before=',ani(cc)
-                !print*, 'rhobar_before=',rhobar(cc)
-                !print*, 'Viadum_before=',Viadum(cc)
-                !print*, 'Vicdum_before=',Vicdum(cc)
-                !endif
-
-                ! New diagnose of shape (ai, ci, ani, cni)
-                call shape_diag(gammnu,ni(cc,k),qi(cc,k),Viadum(cc),Vicdum(cc),ao,deltastr(cc),&
-                                alphstr,alphv,betam,ai(cc,k),ci(cc,k),ani(cc),cni(cc))
-
-                !call var_check(fourthirdspi, gammnu, qi(cc,k), deltastr(cc),       &
-                !ani(cc), cni(cc), rni(cc), rhobar(cc), ni(cc,k), ai(cc,k), ci(cc,k),  &
-               ! alphstr, alphv, betam)
-
-
-                !alphstr=ao**(1.-deltastr(cc))
-                !alphv = fourthirdspi*alphstr
-                !betam = 2.+deltastr(cc)
-
-                ! Hold deltastar constant but diagnose new ani
-                !ani(cc) = ((Viadum(cc)**2/(fourthirdspi*Vicdum(cc)*ni(cc,k)))*&
-                !(gamma(nu+2.*deltastr(cc)+1.)*gammnu/gamma(nu+2.+deltastr(cc))**2))**(1./3.)
-
-
-                !rhobar(cc) = (qi(cc,k)*gammnu/(alphv*ani(cc)**betam*ni(cc,k)*gamma(nu+betam)))
-
-
-                !if (ani(cc).gt.2.e-3) then
-                !print*, 'ds_after=',deltastr(cc)
-                !print*, 'ani_after=',ani(cc)
-                !print*, 'rhobar_after=',rhobar(cc)
-                !print*, 'Viadum_after=',Viadum(cc)
-                !print*, 'Vicdum_after=',Vicdum(cc)
-                !stop
-                !endif
-
-                endif
-
-               ! ai(cc,k) = ai(cc,k) + vagg(cc)*dt
-               ! ci(cc,k) = ci(cc,k) + vcagg(cc)*dt
+                qi(cc,k) = qi(cc,k) + qagg(cc)
+                ni(cc,k) = ni(cc,k) + nagg(cc)
                 if(qi(cc,k).gt.QSMALL) then
                    
   !.. Aggregate (unmelted) density and aspect ratio are assumed
   !.. Force the shape of aggregates
-                   if(cc.eq.IICE3) then
-                      rhobar(cc) = rhobar_ellip
+                   if(cc.eq.ICE3) then
+                      rhobar(cc)=50.
+                      phiagg3 = 0.2
+                      ani(cc)=.5*dn3
+                      gamma_arg = NU-1.+deltastr(cc)
+                      gi=MIN((MAX((NINT((gamma_arg*100000.)-355000+1)),1)),505001)
+                      cni(cc)=phiagg3*ani(cc)*gammnu/gamma_tab(gi)
 
+                      ai(cc,k)=ani(cc)**2*cni(cc)*ni(cc,k)
+                      ci(cc,k)=cni(cc)**2*ani(cc)*ni(cc,k)
+                      
+                      ni(cc,k)=max(ni(cc,k),QNSMALL)
+                      ai(cc,k)=max(ai(cc,k),QASMALL)
+                      ci(cc,k)=max(ci(cc,k),QASMALL)
 
+                      if(ani(cc).gt.(1.1*ao).and.cni(cc).gt.(1.1*ao)) then
+                         deltastr(cc)=(log(cni(cc))-log(ao))/(log(ani(cc))-log(ao))
+                      else
+                         deltastr(cc)=1.
+                      endif
 
-                      call var_check_agg(fourthirdspi,qi(cc,k),ni(cc,k),ani(cc),rhobar(cc))
-
+                      call var_check(NU, ao, fourthirdspi, gammnu, qi(cc,k), deltastr(cc),       &
+                           ani(cc), cni(cc), rni(cc), rhobar(cc), ni(cc,k), ai(cc,k), ci(cc,k),  &
+                           alphstr, alphv, betam)
 
                    else
 
   !.. Variable check on ice-1 and ice-2 after aggregation
+                      ni(cc,k)=max(ni(cc,k),QNSMALL)
+                      ai(cc,k)=max(ai(cc,k),QASMALL)
+                      ci(cc,k)=max(ci(cc,k),QASMALL)
+                      ani(cc) =max((((ai(cc,k)**2)/(ci(cc,k)*nibnuc(cc)))**0.333333333333),2.e-6)
+                      cni(cc) =max((((ci(cc,k)**2)/(ai(cc,k)*nibnuc(cc)))**0.333333333333),2.e-6)
 
-                      !ni(cc,k)=max(ni(cc,k),QNSMALL)
-                      !ai(cc,k)=max(ai(cc,k),QASMALL)
-                      !ci(cc,k)=max(ci(cc,k),QASMALL)
-                      !ani(cc) =max((((ai(cc,k)**2)/(ci(cc,k)*nibnuc(cc)))**0.333333333333),2.e-6)
-                      !cni(cc) =max((((ci(cc,k)**2)/(ai(cc,k)*nibnuc(cc)))**0.333333333333),2.e-6)
-
-                      !aniold(cc)  = ani(cc)
-                      !cniold(cc)  = cni(cc)
-                      !deltastr(cc)= dsold(cc)
+                      aniold(cc)  = ani(cc)
+                      cniold(cc)  = cni(cc)
+                      deltastr(cc)= dsold(cc)
                 
-  !.. Update IICE1 and IICE2 sizes after aggregation from
-  !.. updated mass and number mixing ratios (transfer to aggregates) and an
+  !.. Update ice1 and ice2 sizes after aggregation from
+  !.. updated mass and number mixiing ratios (transfer to aggregates) and an
   !.. assumed constant deltastar
-                      !alphstr=ao**(1.-deltastr(cc))
-                      !gamma_arg = NU+2.+deltastr(cc)
-                      !gi=MIN((MAX((NINT((gamma_arg*100000.)-355000+1)),1)),505001)
-                      !ani(cc) = ((qi(cc,k))/(ni(cc,k)*rhobar(cc)*fourthirdspi*alphstr*gamma_tab(gi)*i_gammnu))**&
-                      !     (1./(2.+deltastr(cc)))
-                      !ani(cc)=max(ani(cc),2.e-6)
-                      !cni(cc)=alphstr*ani(cc)**deltastr(cc)
+                      alphstr=ao**(1.-deltastr(cc))
+                      gamma_arg = NU+2.+deltastr(cc)
+                      gi=MIN((MAX((NINT((gamma_arg*100000.)-355000+1)),1)),505001)
+                      ani(cc) = ((qi(cc,k))/(ni(cc,k)*rhobar(cc)*fourthirdspi*alphstr*gamma_tab(gi)*i_gammnu))**&
+                           (1./(2.+deltastr(cc)))
+                      ani(cc)=max(ani(cc),2.e-6)
+                      cni(cc)=alphstr*ani(cc)**deltastr(cc)
 
   !.. volume and volume*aspect ratio updates
-                      !ai(cc,k) = ai(cc,k) + cniold(cc)*nibnuc(cc)*2.*aniold(cc)*(ani(cc)-aniold(cc)) + &
-                      !     nibnuc(cc)*aniold(cc)**2*(cni(cc)-cniold(cc)) + &
-                      !     aniold(cc)**2*cniold(cc)*(ni(cc,k)-nibnuc(cc))
+                      ai(cc,k) = ai(cc,k) + cniold(cc)*nibnuc(cc)*2.*aniold(cc)*(ani(cc)-aniold(cc)) + &
+                           nibnuc(cc)*aniold(cc)**2*(cni(cc)-cniold(cc)) + &
+                           aniold(cc)**2*cniold(cc)*(ni(cc,k)-nibnuc(cc))
                       
-                      !ci(cc,k) = ci(cc,k) + aniold(cc)*nibnuc(cc)*2.*cniold(cc)*(cni(cc)-cniold(cc)) + &
-                      !     nibnuc(cc)*cniold(cc)**2*(ani(cc)-aniold(cc)) + &
-                      !     cniold(cc)**2*aniold(cc)*(ni(cc,k)-nibnuc(cc))
+                      ci(cc,k) = ci(cc,k) + aniold(cc)*nibnuc(cc)*2.*cniold(cc)*(cni(cc)-cniold(cc)) + &
+                           nibnuc(cc)*cniold(cc)**2*(ani(cc)-aniold(cc)) + &
+                           cniold(cc)**2*aniold(cc)*(ni(cc,k)-nibnuc(cc))
                       
   !.. Keep everything in bounds
                       ni(cc,k)=max(ni(cc,k),QNSMALL)
                       ai(cc,k)=max(ai(cc,k),QASMALL)
                       ci(cc,k)=max(ci(cc,k),QASMALL)
 
-                      !if(ani(cc).gt.(1.1*ao).and.cni(cc).gt.(1.1*ao)) then
-                     !    deltastr(cc)=(log(cni(cc))-log(ao))/(log(ani(cc))-log(ao))
-                     ! else
-                     !    deltastr(cc)=1.
-                     ! endif
-
-
-                      !.. Aggregation should only make the average distribution more spherical
-                      if(dsold(cc).le.1.) then
-                      if(deltastr(cc).lt.dsold(cc)) then
-                         deltastr(cc)=dsold(cc)
-                      endif
-                      if(deltastr(cc).gt.1.) then
-                         deltastr(cc)=1.
-                      endif
+                      if(ani(cc).gt.(1.1*ao).and.cni(cc).gt.(1.1*ao)) then
+                         deltastr(cc)=(log(cni(cc))-log(ao))/(log(ani(cc))-log(ao)) 
                       else
-                      if(deltastr(cc).gt.dsold(cc)) then
-                         deltastr(cc)=dsold(cc)
-                      endif
-                      if(deltastr(cc).lt.1.) then
                          deltastr(cc)=1.
                       endif
-                      endif
-
-                      if (cc.ne.IICE3) then
-                      call var_check(fourthirdspi, gammnu, qi(cc,k), deltastr(cc),       &
+                      
+                      call var_check(NU, ao, fourthirdspi, gammnu, qi(cc,k), deltastr(cc),       &
                            ani(cc), cni(cc), rni(cc), rhobar(cc), ni(cc,k), ai(cc,k), ci(cc,k),  &
                            alphstr, alphv, betam)
-
-
-                      endif
 
                    endif
                 endif  !.. If ice exist
              enddo     !.. Loop over all species
-
-
-
-          endif        !.. If temperature < 273.15 K and Aggregation turned on.
+          endif        !.. If temperature < 273.15 K
           
   !--------------------------------------------------------------------------------------------------------------!
   !--------------------------------------------------------------------------------------------------------------!
@@ -3033,7 +2368,6 @@ contains
                 theta(k)=theta(k)+theta(k)*i_temp*(prdr(cc)+dQRfzri(cc))*xxlf*i_cp*dt
              enddo
           endif
-
           
           temp  = theta(k)/(100000./pres_e(k))**(RCP)
           i_temp= 1./temp
@@ -3089,13 +2423,8 @@ contains
 
              if(qi(cc,k).gt.QSMALL) then
                 ni(cc,k)=max(ni(cc,k),QNSMALL)
-                if(cc.eq.IICE3) then
-                nmon(k)=max(nmon(k),2.*QNSMALL)
-                endif
                 ai(cc,k)=max(ai(cc,k),QASMALL)
                 ci(cc,k)=max(ci(cc,k),QASMALL)
-
-                if (cc.ne.IICE3) then
                 ani(cc) =max((((ai(cc,k)**2)/(ci(cc,k)*ni(cc,k)))**0.333333333333),2.e-6)
                 cni(cc) =max((((ci(cc,k)**2)/(ai(cc,k)*ni(cc,k)))**0.333333333333),2.e-6)
                 
@@ -3104,29 +2433,64 @@ contains
 
                 deltastr(cc)=(log(cni(cc))-log(ao))/(log(ani(cc))-log(ao)) 
                 
-                call var_check(fourthirdspi, gammnu, qi(cc,k), deltastr(cc),       &
+                call var_check(NU, ao, fourthirdspi, gammnu, qi(cc,k), deltastr(cc),       &
                      ani(cc), cni(cc), rni(cc), rhobar(cc), ni(cc,k), ai(cc,k), ci(cc,k),  &
                      alphstr, alphv, betam)
-
-                endif
                 
   !.. Final check on aggregates
-                if(cc.eq.IICE3) then
-                      rhobar(cc) = rhobar_ellip
+                if(cc.eq.ICE3) then
+                   if(temp.le.T0) then
+                      rhobar(cc)=50.
+                      phiagg3 = 0.2
+                      gamma_arg = NU-1.+deltastr(cc)
+                      gi=MIN((MAX((NINT((gamma_arg*100000.)-355000+1)),1)),505001)
+                      cni(cc)=phiagg3*ani(cc)*gammnu/gamma_tab(gi)
 
-                      call var_check_agg(fourthirdspi,qi(cc,k),ni(cc,k),ani(cc),rhobar(cc))
+                      ai(cc,k)=ani(cc)**2*cni(cc)*ni(cc,k)
+                      ci(cc,k)=cni(cc)**2*ani(cc)*ni(cc,k)
+                   endif
+                   
+                   if(ani(cc).gt.(1.1*ao).and.cni(cc).gt.(1.1*ao)) then
+                      deltastr(cc)=(log(cni(cc))-log(ao))/(log(ani(cc))-log(ao))
+                   else
+                      deltastr(cc)=1.
+                   endif
+  !.. Keep aggregates spherical or oblate (for now)
+                   deltastr(cc) = min(deltastr(cc),1.)
 
+                   alphstr=ao**(1.-deltastr(cc))
+                   gamma_arg = NU+2.+deltastr(cc)
+                   gi=MIN((MAX((NINT((gamma_arg*100000.)-355000+1)),1)),505001)
+                   ani(cc) = ((qi(cc,k))/(ni(cc,k)*rhobar(cc)*fourthirdspi*alphstr*&
+                        gamma_tab(gi)/gammnu))**(1./(2.+deltastr(cc)))
+
+                   ani(cc) = max(ani(cc),2.e-6)
+                   cni(cc)=alphstr*ani(cc)**deltastr(cc)
+
+  !.. Final check on aggregate size (implicit breakup)
+                   if(ani(cc).gt.0.5e-3) then
+                      ani(cc)=0.5e-3
+                      cni(cc)=ao**(1.-deltastr(cc))*ani(cc)**deltastr(cc)
+                      gamma_arg = NU+2.+deltastr(cc)
+                      gi=MIN((MAX((NINT((gamma_arg*100000.)-355000+1)),1)),505001)
+                      ni(cc,k) = (qi(cc,k))/(rhobar(cc)*fourthirdspi*ao**(1.-deltastr(cc))* &
+                           ani(cc)**(2.+deltastr(cc))*gamma_tab(gi)/gammnu)
+                      ni(cc,k)=max(ni(cc,k),QNSMALL)
+                   endif
+                
+                   ai(cc,k)=ani(cc)**2*cni(cc)*ni(cc,k)
+                   ci(cc,k)=cni(cc)**2*ani(cc)*ni(cc,k)
+
+                   call var_check(NU, ao, fourthirdspi, gammnu, qi(cc,k), deltastr(cc),       &
+                        ani(cc), cni(cc), rni(cc), rhobar(cc), ni(cc,k), ai(cc,k), ci(cc,k),  &  
+                        alphstr, alphv, betam)
                    
                 endif ! Check on aggregates
-
-
 
   !.. Fall speed moved to here
   !.. See Harrington et al. 2013 and Mitchell and Heymsfield 2005
                 fv(cc) = 1.0
                 fh(cc) = 1.0
-
-            if (cc.ne.IICE3) then
                 
                 gamma_arg = NU-1.+deltastr(cc)
                 gi=MIN((MAX((NINT((gamma_arg*100000.)-355000+1)),1)),505001)
@@ -3145,7 +2509,7 @@ contains
                    bl = 1.
                    aa = PI*alphstr
                    ba = deltastr(cc) + 1.
-                  qe = 1.0
+                   qe = 1.0
                 else if(phiivt .eq. 1.0)then
                    bl = 1.
                    al = 2.
@@ -3181,7 +2545,7 @@ contains
                 endif
                 
   !.. Reynolds Number
-                Nre = am*xm**bm
+                Nre = am*xm**bm          
                 
   !.. Number-averaged ice fall speed
                 vtrni1(cc,k) = min((mu/rhoair(k)*0.5 * am*(xn)**bm*ani(cc)**(bx*bm-1.) * &
@@ -3190,59 +2554,6 @@ contains
   !.. Mass-averaged ice fall speed
                 vtrmi1(cc,k) = min((mu/rhoair(k)*0.5 * am*(xn)**bm*ani(cc)**(bx*bm-1.) * &
                      (gamma(NU+bx*bm-1.+2.+deltastr(cc)))/(gamma(NU+2.+deltastr(cc)))),25.)
-
-                elseif (cc.eq.IICE3) then ! Aggregate fallspeed calc for sedimentation
-
-                alphm_agg = (qi(cc,k)/ni(cc,k))*(1./phiba_phica_bar)*ani(cc)**(-betm_agg)*gamma(NU_AGG)/gamma(NU_AGG+betm_agg)
-
-                   ! Coefficients for projected area from Mitchell 1996
-                alphx_agg = 8.*alphm_agg*alph_ar_agg**(-kc)*G_HOME*rhoair(k)/(PI*mu**2)
-
-                !Average Best Number
-                xm = alphx_agg*ani(cc)**betx_agg * gamma(NU_AGG+betx_agg)/gamma(NU_AGG) * &
-                pbeta_chi
-
-                bm = (C1*sqrt(xm)/&
-                (2.*(sqrt(1+C1*sqrt(xm)) - 1.)*sqrt(1.+C1*sqrt(xm)))) - &
-                ((a0*b0*xm**b0)/(C2*(sqrt(1.+C1*sqrt(xm))-1.)**2))
-
-                am = &
-                (C2*((sqrt(1.+C1*sqrt(xm))-1.)**2) - a0*xm**b0)/(xm**bm)
-
-                zetba1(cc,k) = chi_ba*bm-0.5*bet_ba
-                zetca1(cc,k) = chi_ca*bm-0.5*bet_ca
-
-                !Average Reynolds Number
-                Nre = am*xm**bm
-
-                alphvt_agg = mu/rhoair(k)*0.5*am*(alphx_agg)**bm
-                betvt1(cc,k) = betx_agg*bm-1.
-
-                vtn = alphvt_agg*ani(cc)**betvt1(cc,k)
-
-
-            !    print*, 'an=',ani(cc)
-            !    print*, 'alphx_agg=',alphx_agg
-            !    print*, 'alphm_agg=',alphm_agg
-            !    print*, 'C1=',C1
-            !    print*, 'C2=',C2
-            !    print*, 'bm=',bm
-            !    print*, 'xm=',xm
-            !    print*, 'pbeta_chi=',pbeta_chi
-            !    print*, 'chi_ba=',chi_ba
-            !    print*, 'chi_ca=',chi_ca
-            !    print*, 'zetaba=',zetba1(cc,k)
-            !    print*, 'zetaca=',zetca1(cc,k)
-
-
-                vtrni1(cc,k) = vtn*gamma(NU_AGG+betvt1(cc,k))/gamma(NU_AGG) * &
-                beta_moms(zetba1(cc,k),zetca1(cc,k),aba,bba,bcb)
-
-                vtrmi1(cc,k) = vtn*gamma(NU_AGG+betvt1(cc,k)+betm_agg)/gamma(NU_AGG+betm_agg) * &
-                beta_moms(zetba1(cc,k)+1.,zetca1(cc,k)+1.,aba,bba,bcb)/phiba_phica_bar
-
-
-                endif
                 
   !.. Remove size sorting when melting
                 if(temp.gt.T0.and.qmlt(cc).lt.0.) then
@@ -3255,8 +2566,6 @@ contains
   !.. For simlicity this is 
   !.. Planar ice:   integral of a^2c / integral of a^2
   !.. Columnar ice: integral of a^2c / integral of a*c
-
-                if (cc.ne.IICE3) then
 
                 gamma_arg = NU-1.+deltastr(cc)
                 gi=MIN((MAX((NINT((gamma_arg*100000.)-355000+1)),1)),505001)
@@ -3279,14 +2588,9 @@ contains
                 ci(cc,k) = cni(cc)**2*ani(cc)*ni(cc,k)
                 ai(cc,k) = ani(cc)**2*cni(cc)*ni(cc,k)
 
-                endif
-
                 ai(cc,k)=max(ai(cc,k),QASMALL)
                 ci(cc,k)=max(ci(cc,k),QASMALL)
                 ni(cc,k)=max(ni(cc,k),QNSMALL)
-                if(cc.eq.IICE3) then
-                nmon(k)=max(nmon(k),2.*QNSMALL)
-                endif
 
              else
   !.. If not enough ice convert to vapor
@@ -3295,9 +2599,6 @@ contains
                 qi(cc,k)=0.
                 ai(cc,k)=0.
                 ni(cc,k)=0.
-                if(cc.eq.IICE3) then
-                nmon(k)=0.
-                endif
                 ci(cc,k)=0.
                 vtrzi1(cc,k)=0.
                 vtrmi1(cc,k)=0.
@@ -3316,16 +2617,6 @@ contains
                 phii1d(cc,k) = cni(cc)/ani(cc)*gamma_tab(gi)*i_gammnu
                 rhopo1d(cc,k) = rhobar(cc)
              endif
-
-             if (cc.eq.IICE3.and.qi(cc,k).gt.1.e-9.and.ani(cc).gt.2.e-6) then
-
-             rhopo1d(cc,k) = rhobar(cc)
-             di1d(cc,k) = 2.*NU_AGG*ani(cc) ! Currently number-weighted.
-             vmi1d(cc,k) = vtrmi1(cc,k)
-
-             endif
-
-            ! LEE NOTE: probably can reduce these calculations using gamma function properties.
              
              gamma_arg = NU+3.+deltastr(cc)
              gi=MIN((MAX((NINT((gamma_arg*100000.)-355000+1)),1)),505001)
@@ -3334,7 +2625,7 @@ contains
              gamma_arg = NU+2.+(2.*deltastr(cc))
              gi3=MIN((MAX((NINT((gamma_arg*100000.)-355000+1)),1)),505001)
 
-             if(cc.ne.IICE3.and.ai(cc,k).gt.1.e-12.and.ci(cc,k).gt.1.e-12.and. &
+             if(ai(cc,k).gt.1.e-12.and.ci(cc,k).gt.1.e-12.and. &
                   ani(cc).gt.2.e-6.and.cni(cc).gt.2.e-6.and.qi(cc,k).gt.1.e-9) then
                 di1d(cc,k)  = MAX((2.*ani(cc)*gamma_tab(gi)/gamma_tab(gi2)), &
                      (2.*cni(cc)*gamma_tab(gi3)/gamma_tab(gi2)))
@@ -3342,26 +2633,17 @@ contains
              endif
 
              if(ni(cc,k).gt.0..and.ani(cc).gt.0.) then
-                if (cc.ne.IICE3) then
                 vtrzi1(cc,k) = 0.176/0.93*(6./PI)**2*((fourthirdspi*rhobar(cc)* &
                      (ao)**(1.-deltastr(cc)))/(2.**(2.+deltastr(cc))))**2 * &
                      rhoair(k)/900./900.*ni(cc,k)*(2.*ani(cc))**(2.*(2.+deltastr(cc))) * &
                      gamma(NU+2.*(2.+deltastr(cc)))*i_gammnu
-                elseif (cc.eq.IICE3) then
-
-                vtrzi1(cc,k) = 0.176/0.93*(6./PI)**2*((fourthirdspi*rhobar(cc)/&
-                (2.**3)))**2 * &
-                rhoair(k)/900./900.*ni(cc,k)*(2.*ani(cc))**(6) * &
-                gamma(NU_AGG+4.)/gamma(NU_AGG)*pb2
-
-                endif
                 vtrzi1(cc,k) = 1.e18*vtrzi1(cc,k)
              else
                 vtrzi1(cc,k) = 0.
              endif
           enddo    !.. Loop over all ice species
           
-          dbzsum = dbzr + vtrzi1(IICE1,k) + vtrzi1(IICE2,k) + vtrzi1(IICE3,k)
+          dbzsum = dbzr + vtrzi1(ICE1,k) + vtrzi1(ICE2,k) + vtrzi1(ICE3,k)
           if(dbzsum.ne.0.) then
              dbz1d(k) = 10.*Log10(dbzsum)
              dbz1d(k) = MAX(-35.,dbz1d(k))
@@ -3375,11 +2657,11 @@ contains
              totaliwc = totaliwc + qi(cc,k)
           enddo
           if(totaliwc.gt.0.) then
-             radw1 = MAX((MIN((qi(IICE1,k)/totaliwc),1.)),0.)
-             radw2 = MAX((MIN((qi(IICE2,k)/totaliwc),1.)),0.)
-             radw3 = MAX((MIN((qi(IICE3,k)/totaliwc),1.)),0.)
-             effi1d(k) = MAX((MIN((effi(IICE1,k)*radw1 + effi(IICE2,k)*radw2 + &
-                  effi(IICE3,k)*radw3),999.e-6)),5.e-6)
+             radw1 = MAX((MIN((qi(ICE1,k)/totaliwc),1.)),0.)
+             radw2 = MAX((MIN((qi(ICE2,k)/totaliwc),1.)),0.)
+             radw3 = MAX((MIN((qi(ICE3,k)/totaliwc),1.)),0.)
+             effi1d(k) = MAX((MIN((effi(ICE1,k)*radw1 + effi(ICE2,k)*radw2 + &
+                  effi(ICE3,k)*radw3),999.e-6)),5.e-6)
           else
              effi1d(k)=0.
           endif
@@ -3440,7 +2722,6 @@ contains
           vtrm(k)=0.
           vtrn(k)=0.
           qrpre1d=0.
-          nmon(k)=0.
 
        endif  !.. If domicro
     enddo     !.. do k = kts, kte
@@ -3457,8 +2738,8 @@ contains
        do k = kte,kts,-1
           
   !.. Calculate number of split timesteps
-          maxfall = MAX(vtrmi1(IICE1,k),vtrni1(IICE1,k),vtrmi1(IICE2,k),vtrni1(IICE2,k), &
-               vtrmi1(IICE3,k),vtrni1(IICE3,k),vtrm(k),vtrn(k))
+          maxfall = MAX(vtrmi1(ICE1,k),vtrni1(ICE1,k),vtrmi1(ICE2,k),vtrni1(ICE2,k), &
+               vtrmi1(ICE3,k),vtrni1(ICE3,k),vtrm(k),vtrn(k))
           nstep = MAX(INT(maxfall*dt/dzmic(k)+1.),nstep)
           
           do cc = 1, cat
@@ -3467,13 +2748,9 @@ contains
              ai(cc,k) = ai(cc,k)*rhoair(k)
              ci(cc,k) = ci(cc,k)*rhoair(k)
           enddo
-
-          nmon(k) = nmon(k)*rhoair(k)
+          
           qr(k) = qr(k)*rhoair(k)
           nr(k) = nr(k)*rhoair(k)
-
-
-
        enddo
        
        do nn = 1, nstep
@@ -3486,7 +2763,6 @@ contains
                 fluxci(cc,k) = vtrmi1(cc,k)*ci(cc,k)
                 
              enddo
-             fluxnmon(k) = vtrni1(IICE3,k)*nmon(k)
              fluxqr(k) = vtrm(k)*qr(k)
              fluxnr(k) = vtrn(k)*nr(k)
           enddo
@@ -3497,7 +2773,6 @@ contains
              falltndai(cc) = fluxai(cc,KTE)/dzmic(KTE)
              falltndci(cc) = fluxci(cc,KTE)/dzmic(KTE)
           enddo
-          falltndmon = fluxnmon(KTE)/dzmic(KTE)
           falltndqr = fluxqr(KTE)/dzmic(KTE)
           falltndnr = fluxnr(KTE)/dzmic(KTE)
           
@@ -3507,7 +2782,6 @@ contains
              ai(cc,KTE) = ai(cc,KTE)-falltndai(cc)*dt/nstep
              ci(cc,KTE) = ci(cc,KTE)-falltndci(cc)*dt/nstep
           enddo
-          nmon(KTE) = nmon(KTE)-falltndmon*dt/nstep
           qr(KTE) = qr(KTE)-falltndqr*dt/nstep
           nr(KTE) = nr(KTE)-falltndnr*dt/nstep
           
@@ -3518,9 +2792,8 @@ contains
                 falltndni(cc) = (fluxni(cc,k+1)-fluxni(cc,k))/dzmic(k)
                 falltndai(cc) = (fluxai(cc,k+1)-fluxai(cc,k))/dzmic(k)
                 falltndci(cc) = (fluxci(cc,k+1)-fluxci(cc,k))/dzmic(k)
+                
               enddo
-
-             falltndmon = (fluxnmon(k+1)-fluxnmon(k))/dzmic(k)
              falltndqr = (fluxqr(k+1)-fluxqr(k))/dzmic(k)
              falltndnr = (fluxnr(k+1)-fluxnr(k))/dzmic(k)
              
@@ -3540,7 +2813,6 @@ contains
                 endif
                 
              enddo
-             nmon(k) = nmon(k)+falltndmon*dt/nstep
              qr(k) = qr(k)+falltndqr*dt/nstep
              nr(k) = nr(k)+falltndnr*dt/nstep
              
@@ -3558,14 +2830,9 @@ contains
              ai(cc,k) = ai(cc,k)*i_rhoair(k)
              ci(cc,k) = ci(cc,k)*i_rhoair(k)
           enddo
-          nmon(k) = nmon(k)*i_rhoair(k)
           qr(k) = qr(k)*i_rhoair(k)
           nr(k) = nr(k)*i_rhoair(k)
-
-
        enddo
-
-
     endif
 
   !--------------------------------------------------------------------------------------------------------------!
@@ -3584,7 +2851,6 @@ contains
              ni(cc,k)=max(ni(cc,k),QNSMALL)
              ai(cc,k)=max(ai(cc,k),QASMALL)
              ci(cc,k)=max(ci(cc,k),QASMALL)
-             if (cc.ne.IICE3) then
              ani(cc) =max((((ai(cc,k)**2)/(ci(cc,k)*ni(cc,k)))**0.333333333333),2.e-6)
              cni(cc) =max((((ci(cc,k)**2)/(ai(cc,k)*ni(cc,k)))**0.333333333333),2.e-6)
 
@@ -3605,39 +2871,67 @@ contains
              ci(cc,k) = cni(cc)**2*ani(cc)*ni(cc,k)                                           
              ai(cc,k) = ani(cc)**2*cni(cc)*ni(cc,k)
              
-             deltastr(cc)=(log(cni(cc))-log(ao))/(log(ani(cc))-log(ao))
-
-            call var_check(fourthirdspi, gammnu, qi(cc,k), deltastr(cc),       &
-            ani(cc), cni(cc), rni(cc), rhobar(cc), ni(cc,k), ai(cc,k), ci(cc,k),  &
-            alphstr, alphv, betam)
+             deltastr(cc)=(log(cni(cc))-log(ao))/(log(ani(cc))-log(ao)) 
              
   !.. Final check on aggregates
-             elseif(cc.eq.IICE3) then
-                nmon(k)=max(nmon(k),2.*QNSMALL)
+             if(cc.eq.ICE3) then
                 if(temp.le.T0) then
-                   rhobar(cc) = rhobar_ellip
+                   rhobar(cc)=50.
+                   phiagg3 = 0.2
+                   gamma_arg = NU-1.+deltastr(cc)
+                   gi=MIN((MAX((NINT((gamma_arg*100000.)-355000+1)),1)),505001)
+                   cni(cc)=phiagg3*ani(cc)*gammnu/gamma_tab(gi)
                 endif
+                
+                ai(cc,k)=ani(cc)**2*cni(cc)*ni(cc,k)
+                ci(cc,k)=cni(cc)**2*ani(cc)*ni(cc,k)
 
-                deltastr(cc) = 1.0
+                if(ani(cc).gt.(1.1*ao).and.cni(cc).gt.(1.1*ao)) then
+                   deltastr(cc)=(log(cni(cc))-log(ao))/(log(ani(cc))-log(ao))
+                else
+                   deltastr(cc)=1.
+                endif
+  !.. Keep aggregates spherical or oblate (for now)
+                deltastr(cc) = min(deltastr(cc),1.)
+                
+                alphstr=ao**(1.-deltastr(cc))
+                gamma_arg = NU+2.+deltastr(cc)
+                gi=MIN((MAX((NINT((gamma_arg*100000.)-355000+1)),1)),505001)
+                ani(cc) = ((qi(cc,k))/(ni(cc,k)*rhobar(cc)*fourthirdspi*alphstr*&
+                     gamma_tab(gi)/gammnu))**(1./(2.+deltastr(cc)))
+
+                ani(cc) = max(ani(cc),2.e-6)
+                cni(cc)=alphstr*ani(cc)**deltastr(cc)
                 
   !.. Final check on aggregate size (implicit breakup)
+                if(ani(cc).gt.0.5e-3) then
+                   ani(cc)=0.5e-3
+                   cni(cc)=ao**(1.-deltastr(cc))*ani(cc)**deltastr(cc)
+                   gamma_arg = NU+2.+deltastr(cc)
+                   gi=MIN((MAX((NINT((gamma_arg*100000.)-355000+1)),1)),505001)
+                   ni(cc,k) = (qi(cc,k))/(rhobar(cc)*fourthirdspi*ao**(1.-deltastr(cc))* &
+                        ani(cc)**(2.+deltastr(cc))*gamma_tab(gi)/gammnu)
+                   ni(cc,k)=max(ni(cc,k),QNSMALL)
+                endif
 
-              call var_check_agg(fourthirdspi,qi(cc,k),ni(cc,k),ani(cc),rhobar(cc))
-
-
+                ai(cc,k)=ani(cc)**2*cni(cc)*ni(cc,k)
+                ci(cc,k)=cni(cc)**2*ani(cc)*ni(cc,k)
+                
+                call var_check(NU, ao, fourthirdspi, gammnu, qi(cc,k), deltastr(cc),       &
+                     ani(cc), cni(cc), rni(cc), rhobar(cc), ni(cc,k), ai(cc,k), ci(cc,k),  &  
+                     alphstr, alphv, betam)
 
              endif !.. Check on aggregates
 
-
+             call var_check(NU, ao, fourthirdspi, gammnu, qi(cc,k), deltastr(cc),       &
+                  ani(cc), cni(cc), rni(cc), rhobar(cc), ni(cc,k), ai(cc,k), ci(cc,k),  &
+                  alphstr, alphv, betam)
 
           else
              qv(k)=qv(k)+qi(cc,k)
              theta(k)=theta(k)+theta(k)*i_temp*(qi(cc,k)*xxls)*i_cp
              qi(cc,k)=0.
              ni(cc,k)=0.
-             if (cc.eq.IICE3) then
-             nmon(k)=0.
-             endif
              ai(cc,k)=0.
              ci(cc,k)=0.
           endif
@@ -3671,12 +2965,12 @@ contains
   !--------------------------------------------------------------------------------------------------------------!
   !.. This subroutine keeps the ice properties in check
 
-  subroutine var_check(fourthirdspi, gammnu, qidum, dsdum, ani,  &
+  subroutine var_check(NU, ao, fourthirdspi, gammnu, qidum, dsdum, ani,  &
        cni, rni, rbdum, nidum, aidum, cidum, alphstr, alphv, betam)
     
     implicit none
     
-    REAL, INTENT(IN) ::  fourthirdspi, gammnu, qidum
+    REAL, INTENT(IN) :: NU, ao, fourthirdspi, gammnu, qidum
     REAL :: voltmp, maxsize, gamma_arg
     INTEGER :: gi
     REAL, INTENT(INOUT) :: dsdum, ani, cni, rbdum, nidum, aidum, cidum
@@ -3768,97 +3062,39 @@ contains
     return
   end subroutine var_check
 
-
-!----------------------------------------------------------------------!
-
-!----------------------------------------------------------------------!
-  subroutine var_check_agg(fourthirdspi,qidum,nidum,anagg,rhobar)
-  !Make sure ice variables are in line
-
-  implicit none
-
-  REAL, INTENT(INOUT) :: anagg, nidum, qidum
-  REAL, INTENT(IN)    :: fourthirdspi, rhobar
-  real, parameter :: anmax = 1.e-2, anmin = 1.e-6
-  real, parameter :: QSMALL = 1.e-12, QNSMALL= 1.25e-7  !.. Smallest ice mass (kg kg^-1)
-
-
-  if(qidum.lt.0.) then
-    qidum = QSMALL
-  endif
-
-
- ! diagnose anagg
-    anagg = ((qidum/nidum)/(fourthirdspi*rhobar*phiba_phica_bar)*&
-              gamma(NU_AGG)/(gamma(NU_AGG+3.)))**(0.33333333)
-
-
-!.. Size check
-
-  if (anagg.gt.anmax) then
-   anagg = anmax
-   nidum = qidum/(fourthirdspi*anagg**3. * rhobar*&
-           (gamma(nu_agg+3.)/gamma(nu_agg))*phiba_phica_bar)
-  elseif(anagg.lt.anmin) then
-   anagg = anmin
-   nidum = qidum/(fourthirdspi*anagg**3. * rhobar*&
-           (gamma(nu_agg+3.)/gamma(nu_agg))*phiba_phica_bar)
-
-
-  !else
-
- !   anagg = ((qidum/nidum)/(fourthirdspi*rhobar*phiba_phica_bar)*&
- !             gamma(NU_AGG)/(gamma(NU_AGG+3.)))**(0.33333333)
-
-  endif
-
- nidum = max(nidum,QNSMALL)
-
-  return
-  end subroutine var_check_agg
-
-
-
-  !----------------------------------------------------------------------!
-
-  !----------------------------------------------------------------------!
-
   !--------------------------------------------------------------------------------------------------------------!
   !--------------------------------------------------------------------------------------------------------------!
+
+
+
   !.. This is the ventilation, fall speed, vapor growth routine
   !.. See Harrington et al. 2013
 
-  subroutine vaporgrow(cc, dt, ani, cni, rni, igr, nidum, temp, rimesum, presdum,&
-       alphstr, sui, sup, qvs, qvi, mu, iwci, rhodum, qidum, dv, kt,     &
+  subroutine vaporgrow(dt, ani, cni, rni, igr, nidum, temp, rimesum, presdum,    &
+       NU, alphstr, sui, sup, qvs, qvi, mu, iwci, rhodum, qidum, dv, kt, ao,     &
        nsch, npr, gammnu, i_gammnu, fourthirdspi, svpi, xxls, xxlv, xxlf,        &
-       capgam, vtn, vtbarb, vtbarbm, vtbarbz, betvt, anf, cnf, rnf, iwcf, fvdum, &
-       fhdum, rbdum, dsdum, rdout, dsdumout,alphm_agg, zet_ba, zet_ca)
-
+       capgam, vtbarb, vtbarbm, vtbarbz, anf, cnf, rnf, iwcf, fvdum, fhdum,      &
+       rbdum, dsdum, rdout, dsdumout)
+    
+    
     implicit none
     
     real, parameter :: QASMALL= 1.e-19   ! Smallest ice size for sublimation  (squared)
-    integer, intent(IN) :: cc
     REAL, INTENT(IN) :: dt, ani, cni, rni, igr, nidum, temp, presdum
-    REAL, INTENT(IN) :: alphstr, alphm_agg, mu, iwci, rhodum, qidum
-    REAL, INTENT(IN) :: dv, kt, nsch, npr, gammnu, i_gammnu, fourthirdspi, svpi
+    REAL, INTENT(IN) :: NU, alphstr, mu, iwci, rhodum, qidum
+    REAL, INTENT(IN) :: dv, kt, ao, nsch, npr, gammnu, i_gammnu, fourthirdspi, svpi
     REAL, INTENT(IN) :: xxls, xxlv, xxlf, capgam, rimesum, sui, sup, qvs, qvi, dsdum
     REAL :: gammnubet, phii, fs, alphanr, bl, al, aa, ba
     REAL :: xn, bx, xm, am, bm, f_c1, f_c2, del1, del2, alpha, afn, del
     REAL :: xvent, ntherm, bv1, bv2, gv, bt1, bt2, gt, vtbranch, rhodep
     REAL :: videp, vmin, betavol, vi, vf, cf, maxsui, qe, Nre, phif, gamma_arg, rbdumtmp
     INTEGER :: gi, gi2
-    REAL, INTENT(OUT) :: vtn, vtbarb, vtbarbm, vtbarbz
-    REAL, INTENT(OUT) :: betvt, anf, cnf, rnf, iwcf, rdout, zet_ba, zet_ca
+    REAL, INTENT(INOUT) :: vtbarb, vtbarbm, vtbarbz
+    REAL, INTENT(OUT) :: anf, cnf, rnf, iwcf, rdout
     REAL, INTENT(INOUT) :: fvdum, fhdum, dsdumout, rbdum
-
-    real :: alphx_agg, alphvt_agg
-   ! real :: C2, C1
-
-
+    
     fvdum = 1.0
     fhdum = 1.0
-
-    if(cc.lt.IICE3) then
 
     dsdumout = dsdum
     gamma_arg = NU-1.+dsdum
@@ -3867,7 +3103,7 @@ contains
     fs = capgam/rni
     alphanr = ani/rni**(3./(2.+igr))
 
-  !.. Determine  coefficients for the Best number for fall speeds
+  !.. Determine  coefficeients for the Best number for fall speeds
     if(phii.lt.1.0)then
        bl = 1.
        al = 2.
@@ -3915,34 +3151,19 @@ contains
     endif
     
   !.. Reynolds Number
-    Nre = am*xm**bm
-
-  ! Fall speed-size exponent
-    betvt =bx*bm-1.
-
-  !.. Characteristic fall speed
-    vtn = mu/rhodum*0.5 * am*(xn)**bm*ani**(betvt)
+    Nre = am*xm**bm          
     
   !.. Number-averaged ice fall speed
-   ! vtbarb = mu/rhodum*0.5 * am*(xn)**bm*ani**(bx*bm-1.) * &
-    !     (gamma(nu+bx*bm-1.))*i_gammnu
-
-    vtbarb = vtn *(gamma(nu+betvt))*i_gammnu
-
+    vtbarb = mu/rhodum*0.5 * am*(xn)**bm*ani**(bx*bm-1.) * &
+         (gamma(nu+bx*bm-1.))*i_gammnu
 
   !.. Mass-averaged ice fall speed
-   ! vtbarbm = mu/rhodum*0.5 * am*(xn)**bm*ani**(bx*bm-1.) * &
-   !      (gamma(nu+bx*bm-1.+2.+dsdum))/(gamma(nu+2.+dsdum))
-
-    vtbarbm = vtn *(gamma(nu+betvt+2.+dsdum))/(gamma(nu+2.+dsdum))
-
+    vtbarbm = mu/rhodum*0.5 * am*(xn)**bm*ani**(bx*bm-1.) * &
+         (gamma(nu+bx*bm-1.+2.+dsdum))/(gamma(nu+2.+dsdum))
     
   !.. Reflectivity-weighted fall speed (if needed)
-    !vtbarbz = mu/rhodum*0.5 * am*(xn)**bm*ani**(bx*bm-1.) * &
-   !      exp(gammln(nu+bx*bm-1.+4.+2.*dsdum))/exp(gammln(nu+4.+2.*dsdum))
-
-    vtbarbz = vtn *exp(gammln(nu+betvt+4.+2.*dsdum))/exp(gammln(nu+4.+2.*dsdum))
-
+    vtbarbz = mu/rhodum*0.5 * am*(xn)**bm*ani**(bx*bm-1.) * &
+         exp(gammln(nu+bx*bm-1.+4.+2.*dsdum))/exp(gammln(nu+4.+2.*dsdum))
 
   !.. Calculate Ventilation
     xvent = nsch**0.333333333*Nre**0.5
@@ -4126,156 +3347,7 @@ contains
        rnf =rni
        iwcf=iwci
     endif
-
-
-    else
-
-      if (qidum.ge.1.e-12) then
-
-
-        ! Coefficients for projected area from Mitchell 1996
-        alphx_agg = 8.*alphm_agg*alph_ar_agg**(-kc)*G_HOME*rhodum/(PI*mu**2)
-
-        !Average Best Number
-        xm = alphx_agg*ani**betx_agg * gamma(NU_AGG+betx_agg)/gamma(NU_AGG) * &
-        pbeta_chi
-
-        bm = (C1*sqrt(xm)/&
-        (2.*(sqrt(1+C1*sqrt(xm)) - 1.)*sqrt(1.+C1*sqrt(xm)))) - &
-        ((a0*b0*xm**b0)/(C2*(sqrt(1.+C1*sqrt(xm))-1.)**2))
-
-        am = &
-        (C2*((sqrt(1.+C1*sqrt(xm))-1.)**2) - a0*xm**b0)/(xm**bm)
-
-        zet_ba = chi_ba*bm-0.5*bet_ba
-        zet_ca = chi_ca*bm-0.5*bet_ca
-
-        !Average Reynolds Number
-        Nre = am*xm**bm
-
-        alphvt_agg = mu/rhodum*0.5*am*(alphx_agg)**bm
-        betvt = betx_agg*bm-1.
-
-        vtn = alphvt_agg*ani**betvt
-
-        vtbarb = vtn*gamma(NU_AGG+betvt)/gamma(NU_AGG) * &
-        beta_moms(zet_ba,zet_ca,aba,bba,bcb)
-
-        vtbarbm = vtn*gamma(NU_AGG+betvt+betm_agg)/gamma(NU_AGG+betm_agg) * &
-        beta_moms(zet_ba+1.,zet_ca+1.,aba,bba,bcb)/phiba_phica_bar
-
-    ! Relative fall speed dispersion (Coefficient of Variation; function of size)
-   ! sig_vt = sqrt((gamma(NU_AGG+2.*betvt_agg)/gamma(NU_AGG+betvt_agg)**2)*&
-    !               ((beta_moms(2.*zet_ba,2.*zet_ca,aba,bba,bcb)/&
-    !                beta_moms(zet_ba,zet_ca,aba,bba,bcb)**2))-1)
-
-        !sig_vt = sqrt((beta_moms(2.*zet_ba,2.*zet_ca,aba,bba,bcb)/&
-         !           (beta_moms(zet_ba,zet_ca,aba,bba,bcb)**2))-1.)
-
-
-  !  if (bm_agg.lt.0.5) then
-
-   ! print*, 'bm_agg=',bm_agg
-   ! print*, 'zetba=',zet_ba,'zetca=',zet_ca
-   ! print*, 'numterm=',beta_moms(2.*zet_ba,2.*zet_ca,aba,bba,bcb)
-   ! print*, 'demterm=',beta_moms(zet_ba,zet_ca,aba,bba,bcb)**2
-   ! print*, 'sig_vt=',sig_vt
-   ! stop
-   ! endif
-
-
- if (vtbarb/=vtbarb.or.vtbarbm/=vtbarbm) then
-  print*, 'vt nan'
-  print*, 'cc=',cc
-  print*, 'qidum=',qidum
-  print*, 'nidum=',nidum
-  print*, 'alphm=',alphm_agg
-  print*, 'betx=',betx_agg
-  print*, 'alphx=',alphx_agg
-  print*, 'bm=',bm
-  print*, 'am=',am
-  print*,'rhoa=',rhodum
-  print*, 'rhoagg=',rbdum
-  print*,'mu=',mu
-  print*,'an=',ani
-  print*, 'xm=',xm
-  print*, 'NRe=',Nre
-  print*, 'alphvt=',alphvt_agg
-  print*, 'betvt=',betvt
-  print*, 'vtbarb=',vtbarb
-  print*, 'vtbarbm=',vtbarbm
-  print*, 'AR=',alph_ar_agg*ani**bet_ar_agg
-  print*, 'qagg_mom=',qidum/nidum
-  print*, 'qagg_int=',(1/rhodum)*alphm_agg*ani**betm_agg * gamma(NU_AGG+betm_agg)/gamma(NU_AGG) * phiba_phica_bar
-  print*, 'phi_const=', beta_moms(zet_ba,zet_ca,aba,bba,bcb)
-  stop
- endif
-
-
-
-     ! Ventilation
-     xvent = nsch**0.333333333*Nre**0.5
-     ntherm = Nre**0.5*npr**0.333333333
-     if(xvent.le.1.0)then
-     bv1 = 1.0
-     bv2 = 0.14
-     gv = 2.
-     else
-     bv1 = 0.86
-     bv2 = 0.28
-     gv = 1.
-     endif
-     if(ntherm.lt.1.4)then
-     bt1 = 1.0
-     bt2 = 0.108
-     gt = 2.0
-     else
-     bt1 = 0.78
-     bt2 = 0.308
-     gt = 1.0
-    endif
-    fvdum = bv1 + bv2*xvent**gv
-    fhdum = bt1 + bt2*ntherm**gt
-
-
-   if(temp.le.T0) then
-
-!.. Vapor growth solution which includes heating from rime mass
-!.. See J.P. Chen's thesis
-    alpha = (dv*fvdum*polysvp(temp,1)*xxls)/(RV*kt*fhdum*temp)
-    if(nidum.gt.0.0.and.rimesum.gt.0.0) then
-
-    del1 = (xxlf*(rimesum/nidum)/(4.*PI*kt*fhdum*capgam)) * &
-    ((temp + alpha*((xxls/(RV*temp))-1.))**(-1.0))
-    else
-    del1 = 0.0
-    endif
-    del1 =0.0
-    del2 = sui * &
-    (((temp/alpha) + ((xxls/(RV*temp))-1.))**(-1.0))
-    del = del1 + del2
-    afn = ((dv*fvdum*polysvp(temp,1))/(RV*temp)) * &
-    (sui - del*((xxls/(RV*temp))-1.))
-
-    ! NEW AGGREGATE MASS FROM VAPOR
-    iwcf = iwci+4.*PI*nidum*afn*capgam*dt
-
-    else
-
-     iwcf=iwci
-    !vtbarb=vtbarbm !TEST TO REMOVE SIZE SORTING FOR MELTING ICE
-
-    endif
-
-
-
-
-    endif
-
-
-
-    endif
-
+   
   end subroutine vaporgrow
 
   !--------------------------------------------------------------------------------------------------------------!
@@ -4283,11 +3355,11 @@ contains
   !.. This routine is used to calculate the distribution-averaged 
   !.. capacitance (see Harrington et al. 2013)
 
-  real function capacitance_gamma(ani,dsdum,alphstr,i_gammnu)
+  real function capacitance_gamma(ani,dsdum,NU,alphstr,i_gammnu)
     
     implicit none
     
-    REAL, INTENT(IN) :: ani, dsdum, alphstr, i_gammnu
+    REAL, INTENT(IN) :: ani, dsdum, NU, alphstr, i_gammnu
     REAL :: a1, a2, b1, b2, c1, c2, d1, d2, gammad1, gammad2
     
   !.. Oblate Spheroid
@@ -4332,14 +3404,14 @@ contains
 
   !--------------------------------------------------------------------------------------------------------------!
   !--------------------------------------------------------------------------------------------------------------!
-  SUBROUTINE wet_growth_check(temp, rhodum, xxlv, xxlf, qvdum, dv, kt, qs0, &
+  SUBROUTINE wet_growth_check(NU, temp, rhodum, xxlv, xxlf, qvdum, dv, kt, qs0, &
        fvdum, fhdum, rimedum, rni, nidum, dgflag)
     
     IMPLICIT NONE
 
   !.. Check for wet growth conditions
   !.. See Lamb and Verlinde (2011)
-    REAL, INTENT(IN) :: temp, rhodum, xxlv, xxlf, qvdum, dv, kt
+    REAL, INTENT(IN) :: NU, temp, rhodum, xxlv, xxlf, qvdum, dv, kt
     REAL, INTENT(IN) :: fvdum, fhdum, rni, nidum
     REAL, INTENT(IN) :: qs0, rimedum
     REAL :: wetg, dum
@@ -4411,891 +3483,6 @@ contains
     END IF
       
   end function polysvp
-
- !-------------------------------------------------------------------------
- real function beta(x,y)
-! Beta function
- implicit none
-
- real :: x, y,xmax
- !double precision :: xd, yd
-
- xmax = 50.
-
- !beta = gamma_tab(MIN((MAX((NINT((x*100000.)-355000+1)),1)),505001))*&
- !       gamma_tab(MIN((MAX((NINT((y*100000.)-355000+1)),1)),505001))/&
- !       gamma_tab(MIN((MAX((NINT(((x+y)*100000.)-355000+1)),1)),505001))
-
- beta = exp(gammln(x)+gammln(y)-gammln(x+y))
-
- !beta = gamma(x)*gamma(y)/gamma(x+y)
-
- if(beta/=beta.or.beta.gt.1.e20) then
- print*, 'NaN or Inf expression in beta'
- print*,'x=',x,'y=',y
- stop
- endif
-
- return
- end function beta
-
-
-
-!-------------------------------------------------------------------------
- real function beta_moms(m,n,aba,bba,bcb)
- ! Equation 8 from Dunnavan et al. 2019 JAS
- implicit none
-
- !real :: aba, bba, bcb
- real :: m, n, aba, bba, bcb
-
- !m = dble(m)
- !n = dble(n)
- !aba = dble(aba)
- !bba = dble(bba)
- !bcb = dble(bcb)
-
- ! agg_switch toggles between spheres/fractals (0) and ellipsoids (1)
-
- if (m.eq.0..and.n.eq.0.) then
-
- beta_moms = 1.0
-
- else
-
- if (agg_switch.eq.1) then
-
- beta_moms = beta(m+n+aba,bba)*beta(n+aba+bba,bcb)/(beta(aba,bba)*beta(aba+bba,bcb))
-
- elseif (agg_switch.eq.2) then
-
- beta_moms = phiagg**n
-
- else
-
- beta_moms = 1.0
-
- endif
-endif
-
- return
- end function beta_moms
-
-!------------------------------------------------------------------------
-
-!------------------------------------------------------------------------
- real function delta_vtm(vtmx,vtmy)
- ! Calculates fallspeed difference approximation following Milbrandt and Yau (2005b)
- ! (which follows Wisner et al. 1972 and Murakami 1990)
- implicit none
-
- real :: r, vtmx, vtmy
-
- r = 0.04
- delta_vtm = sqrt((vtmx-vtmy)**2. + r*vtmx*vtmy )
-
- return
- end function delta_vtm
-
-
-!------------------------------------------------------------------------
- real function delta_vtm_seifert(vtnx,betax,betmx,betvx,vtny,betay,betvy,vba,vca,&
-                                S_switch)
- ! Calculates fallspeed difference approximation (which follows Seifert et al. 2006/2014)
- implicit none
-
- real :: vtnx, vtny, dS, betvx, betmx, betvy, betax, betay, vba, vca
-
- integer :: S_switch
- integer :: kcol
-
- real, dimension (1:3) :: Cnk, ki
-
-
- ! Binomial coefficients (2 choose k)
- Cnk = (/1., 2., 1./)
- ! k index
- ki = (/0., 1., 2./)
-
- dS = 0.
-
- if(S_switch.eq.0) then
-    ! P-P Aggregation
-
-    do kcol=1,3
-        dS = dS + Cnk(kcol)*(-1.)**ki(kcol)*gamma(NU+(2.-ki(kcol))*betvx+betax+betmx)*gamma(NU+ki(kcol)*betvx+betax+betmx)
-    enddo
-
-    dS = vtnx/gamma(NU+betax+betmx)*sqrt(dS)
-
-
- elseif(S_switch.eq.1) then
-    ! P-A Aggregation
-
-    do kcol=1,3
-        dS = dS + Cnk(kcol)*(-1.)**(ki(kcol))*vtny**(2.-ki(kcol))*vtnx**(ki(kcol))*gamma(NU+ki(kcol)*betvx+betax+betmx)*&
-            gamma(NU_AGG+(2.-ki(kcol))*betvy+betay)*beta_moms((2.-ki(kcol))*vba+bet_ba,(2.-ki(kcol))*&
-                  vca+bet_ca,aba,bba,bcb)
-    enddo
-
-    dS =sqrt(dS/(gamma(NU+betax+betmx)*pbeta_area*gamma(NU_AGG+betay)))
-
-
- elseif(S_switch.eq.2) then
-
-
-    do kcol=1,3
-
-    dS = dS + Cnk(kcol)*(-1.)**ki(kcol)*gamma(NU_AGG+(2.-ki(kcol))*betvy+betay)*gamma(NU_AGG+ki(kcol)*betvy+betay)*&
-              beta_moms(ki(kcol)*vba+bet_ba,ki(kcol)*vca+bet_ca,aba,bba,bcb)*&
-              beta_moms((2.-ki(kcol))*vba+bet_ba,(2.-ki(kcol))*vca+bet_ca,aba,bba,bcb)
-
-    enddo
-
-    dS = vtny/(gamma(NU_AGG+betay)*pbeta_area)*sqrt(dS)
-
-
- endif
-
-! A-A Aggregation
-
- delta_vtm_seifert = dS
-
-
- return
- end function delta_vtm_seifert
-
-!--------------------------------------------------------------------------------------------------------------!
-!--------------------------------------------------------------------------------------------------------------!
-
-!--------------------------------------------------------------------------------------------------------------!
-!--------------------------------------------------------------------------------------------------------------!
-
-  subroutine starbuck(rhoairdum,tempdum,phidum1,phidum2,rhodum1,rhodum2,&
-                      qdum1,vadum1,vcdum1,ndum1,andum1,alphadum1,betadum1,alphvdum1,alphmdum1,betmdum1,alphcdum1,&
-                      betcdum1,qdum2,vadum2,vcdum2,ndum2,andum2,alphadum2,betadum2,alphvdum2,alphmdum2,betmdum2, &
-                      alphcdum2,betcdum2,qdum3,vadum3,vcdum3,ndum3,andum3,alphadum3,betadum3,dvtn_dum,&
-                      dvtm_dum,dvtc_dum,qagg1,qagg2,qagg3,nagg1,nagg2,nagg3,nmon3,Vagg1,Vagg2,&
-                      Vagg3,Vcagg1,Vcagg2,Vcagg3)
-
-       ! This is the new aggregation method. First, I'm going to follow the
-       ! approach of Milbrandt and Yau (2005) where I'll use the Wisner approx.
-       ! for that nasty fall speed term. This will let me analytically calculate
-       ! the transfer rates, thereby bypassing the aggregation LU. Future updates
-       ! will incorporate the full hydrodynamic kernel.
-       ! ELD
-
-      implicit none
-
-      real, intent(IN) :: qdum1,ndum1,qdum2,ndum2,qdum3,ndum3,andum1,andum2,andum3
-      real, intent(IN) :: vadum1, vcdum1, vadum2, vcdum2, vadum3, vcdum3
-      real, intent(IN) :: alphadum1, betadum1, alphadum2, betadum2
-      real, intent(IN) :: alphmdum1, betmdum1,alphmdum2, betmdum2
-      real, intent(IN) :: alphvdum1, alphvdum2
-      real, intent(IN) :: alphcdum1, betcdum1,alphcdum2, betcdum2
-      real, intent(IN) :: alphadum3, betadum3
-      real, intent(INOUT) :: qagg1,qagg2,qagg3,nagg1,nagg2,nagg3, nmon3
-      real, intent(INOUT) :: Vagg1,Vagg2,Vagg3,Vcagg1,Vcagg2,Vcagg3
-      real, intent(IN) :: rhoairdum, tempdum
-      real, intent(IN) :: rhodum1, rhodum2, phidum1, phidum2
-
-      real, intent(IN), dimension(1:6) :: dvtn_dum,dvtm_dum,dvtc_dum
-
-
-      ! New mass transfer rates
-      real :: pprxfer, pcrxfer, parxfer
-      real :: cprxfer, ccrxfer, carxfer
-      real :: aprxfer, acrxfer
-
-      ! New Volume*aspect ratio transfer rates
-      real :: ppcxfer, pccxfer, pacxfer
-      real :: cpcxfer, cccxfer, cacxfer
-      real :: apcxfer, accxfer
-
-      ! New number transfer rates
-      real :: ppenxfer, pcenxfer, paenxfer
-      real :: ccenxfer, caenxfer
-      real :: apenxfer, acenxfer, aaenxfer
-
-      ! New rho/phi dependent efficiencies based on Jensen et al. 2018
-      real :: effnew_pp, effnew_cc, effnew_pc
-      real :: rhoeffmax, phieffmax, rhoeff, phieff
-
-      real :: sourcep, sinkp, sourcec, sinkc, ratioagg
-
-       real, parameter :: QNSMALL= 1.25e-7   ! Smallest ice number
-       real :: eff,ncrossloss,rcrossloss,nselfloss, &
-            rselfloss,ncrossgain,rcrossgain,nselfgain,rselfgain
-
-       integer :: kcol ! index for collection kernel expansion
-       integer, parameter :: eff_switch = 0 ! Switch for Eagg
-       real, parameter :: effc = 0.05
-
-
-      ! Calculate efficiencies
-
-      if (eff_switch.eq.0) then
-       ! Set agg efficiency to constant
-            eff = effc
-      else
-    ! Connolly 2012 aggregation parameterization
-            eff = min(0.2,10.**(0.035*tempdum-0.7))
-
-      endif
-
- !---------------------------------------------------------!
- !---------------------------------------------------------!
-
-      ! New efficiencies
-      !.. Plates + Plates = Aggregates
-       rhoeffmax = rhodum1
-       phieffmax = min(phidum1,1./phidum1)
-
-       if(rhoeffmax.le.400.) then
-          rhoeff = 1.
-       else
-          rhoeff = -0.001923*rhoeffmax + 1.76916
-       endif
-       rhoeff = max(rhoeff,0.)
-       rhoeff = min(rhoeff,1.)
-
-  !.. Based on Connolly et al 2012
-  !.. See Jensen et al. 2018b
-       if(phieffmax.le.0.03) then
-          phieff = 1.
-       elseif(phieffmax.gt.0.03.and.phieffmax.lt.0.85) then
-          phieff = 0.0001*((phieffmax+0.07)**(-4.))
-       else
-          phieff = 0.
-       endif
-
-       if(phieff.le.0.001) then
-          phieff = 0.
-       endif
-
-       phieff = max(phieff,0.0)
-       phieff = min(phieff,1.)
-       effnew_pp = phieff * rhoeff
-
-!---------------------------------------------------------!
-
-      ! New efficiencies
-      !.. Columns + Columns = Aggregates
-       rhoeffmax = rhodum2
-       phieffmax = min(phidum2,1./phidum2)
-
-       if(rhoeffmax.le.400.) then
-          rhoeff = 1.
-       else
-          rhoeff = -0.001923*rhoeffmax + 1.76916
-       endif
-       rhoeff = max(rhoeff,0.)
-       rhoeff = min(rhoeff,1.)
-
-  !.. Based on Connolly et al 2012
-  !.. See Jensen et al. 2018b
-       if(phieffmax.le.0.03) then
-          phieff = 1.
-       elseif(phieffmax.gt.0.03.and.phieffmax.lt.0.85) then
-          phieff = 0.0001*((phieffmax+0.07)**(-4.))
-       else
-          phieff = 0.
-       endif
-
-       if(phieff.le.0.001) then
-          phieff = 0.
-       endif
-
-       phieff = max(phieff,0.0)
-       phieff = min(phieff,1.)
-       effnew_cc = phieff * rhoeff
-
- !--------------------------------------------------------!
-
-      ! New efficiencies
-      !.. Plates + Columns = Aggregates
-       rhoeffmax = max(rhodum1,rhodum2)
-       phieffmax = max(min(phidum1,1./phidum1),min(phidum2,1./phidum2))
-       if(rhoeffmax.le.400.) then
-          rhoeff = 1.
-       else
-          rhoeff = -0.001923*rhoeffmax + 1.76916
-       endif
-       rhoeff = max(rhoeff,0.)
-       rhoeff = min(rhoeff,1.)
-
-  !.. Based on Connolly et al 2012
-  !.. See Jensen et al. 2018b
-       if(phieffmax.le.0.03) then
-          phieff = 1.
-       elseif(phieffmax.gt.0.03.and.phieffmax.lt.0.85) then
-          phieff = 0.0001*((phieffmax+0.07)**(-4.))
-       else
-          phieff = 0.
-       endif
-
-       if(phieff.le.0.001) then
-          phieff = 0.
-       endif
-
-       phieff = max(phieff,0.00)
-       phieff = min(phieff,1.)
-       effnew_pc = phieff * rhoeff
-
-
- !--------------------------------------------------------!
- !--------------------------------------------------------!
-
-
-   ! ELD: Apparently these multipliers are correct (according to JYH)
-   !      We're not entirely sure though but we can check this out numerically.
-   !      RAMS apparently has different coefficients. ELD.
-
-        nselfloss = 1.0
-        rselfloss = 1.0
-        nselfgain = 1./2.
-        rselfgain = 1.0
-
-        ncrossloss = 1.0
-        rcrossloss = 1.0
-        ncrossgain = 1./2.
-        rcrossgain = 1.0
-
-! Fill up transfer variables with zeros
-        ! Mass
-        pprxfer  = 0.0
-        ccrxfer  = 0.0
-        pcrxfer  = 0.0
-        cprxfer  = 0.0
-        parxfer  = 0.0
-        carxfer  = 0.0
-
-        ! Number
-        ppenxfer = 0.0
-        ccenxfer = 0.0
-        pcenxfer = 0.0
-        paenxfer = 0.0
-        caenxfer = 0.0
-        aaenxfer = 0.0
-
-        ! Volume*aspect ratio
-        ppcxfer = 0.0
-        cccxfer = 0.0
-        pccxfer = 0.0
-        cpcxfer = 0.0
-        pacxfer = 0.0
-        cacxfer = 0.0
-
-!----------------------------------------------!
-! So total combinations for aggregation are:
-!----------------------------------------------!
-!    Collected + Collectee = New Category
-!----------------------------------------------!
-!    Plates + Plates   = Agg               (1)
-!    Columns + Columns = Agg               (2)
-!    Plates + Columns  = Agg               (3)
-!    Columns + Plates  = Agg               (4)
-!    Plates + Agg      = Agg               (5)
-!    Columns + Agg     = Agg               (6)
-!    Agg + Agg         = Agg (number only) (7)
-!----------------------------------------------!
-
-
-! LEE NOTE: Make sure to square out the dvtn/dvtm/dvtc etc. stuff
-
-        do kcol=1,3 ! collection kernel expansion
-
-            ! Plates + Plates = Agg
-            ! Mass, Volume*Aspect Ratio, Number
-            pprxfer = pprxfer + &
-            Cnk(kcol)*gamma(nu+betmdum1+0.5*betadum1*(2.-ki(kcol)))*&
-                      gamma(nu+0.5*betadum1*ki(kcol))
-
-            ppcxfer = ppcxfer + &
-            Cnk(kcol)*gamma(nu+betcdum1+2.-ki(kcol))*gamma(nu+ki(kcol))
-
-            ppenxfer = ppenxfer + &
-            Cnk(kcol)*gamma(nu+0.5*betadum1*(2.-ki(kcol)))*&
-                      gamma(nu+0.5*betadum1*ki(kcol))
-
-            ! Columns + Columns = Agg
-            ! Mass, Volume*Aspect Ratio, Number
-
-            ccrxfer = ccrxfer + &
-            Cnk(kcol)*gamma(nu+betmdum2+0.5*betadum2*(2.-ki(kcol)))*&
-                      gamma(nu+0.5*betadum2*ki(kcol))
-
-            cccxfer = cccxfer + &
-            Cnk(kcol)*gamma(nu+betcdum2+2.-ki(kcol))*gamma(nu+ki(kcol))
-
-            ccenxfer = ccenxfer + &
-            Cnk(kcol)*gamma(nu+0.5*betadum2*(2.-ki(kcol)))*&
-                      gamma(nu+0.5*betadum2*ki(kcol))
-
-            ! Plates + Columns = Agg
-            ! Mass, Volume*Aspect Ratio, Number
-
-            pcrxfer = pcrxfer + &
-            Cnk(kcol)*alphadum1**(0.5*betadum1*(2.-ki(kcol)))*&
-                      alphadum2**(0.5*betadum2*ki(kcol))*&
-                      andum1**(betmdum1+0.5*betadum1*(2.-ki(kcol)))*&
-                      andum2**(0.5*betadum2*ki(kcol))*&
-                      gamma(nu+betmdum1+0.5*betadum1*(2.-ki(kcol)))*&
-                      gamma(nu+0.5*betadum2*ki(kcol))
-
-            pccxfer = pccxfer + &
-            Cnk(kcol)*alphadum1**(0.5*betadum1*(2.-ki(kcol)))*&
-                      alphadum2**(0.5*betadum2*ki(kcol))*&
-                      andum1**(betcdum1+0.5*betadum1*(2.-ki(kcol)))*&
-                      andum2**(0.5*betadum2*ki(kcol))*&
-                      gamma(nu+betcdum1+0.5*betadum1*(2.-ki(kcol)))*&
-                      gamma(nu+0.5*betadum2*ki(kcol))
-
-            pcenxfer = pcenxfer + &
-            Cnk(kcol)*alphadum1**(0.5*betadum1*(2.-ki(kcol)))*&
-                      alphadum2**(0.5*betadum2*ki(kcol))*&
-                      andum1**(0.5*betadum1*(2.-ki(kcol)))*&
-                      andum2**(0.5*betadum2*ki(kcol))*&
-                      gamma(nu+0.5*betadum1*(2.-ki(kcol)))*&
-                      gamma(nu+0.5*betadum2*ki(kcol))
-
-
-            ! Columns + Plates = Agg
-            ! Mass, Volume*Aspect Ratio, Number
-
-           cprxfer = cprxfer + &
-            Cnk(kcol)*alphadum2**(0.5*betadum2*(2.-ki(kcol)))*&
-                      alphadum1**(0.5*betadum1*ki(kcol))*&
-                      andum2**(betmdum2+0.5*betadum2*(2.-ki(kcol)))*&
-                      andum1**(0.5*betadum1*ki(kcol))*&
-                      gamma(nu+betmdum2+0.5*betadum2*(2.-ki(kcol)))*&
-                      gamma(nu+0.5*betadum1*ki(kcol))
-
-
-            cpcxfer = cpcxfer + &
-            Cnk(kcol)*alphadum2**(0.5*betadum2*(2.-ki(kcol)))*&
-                      alphadum1**(0.5*betadum1*ki(kcol))*&
-                      andum2**(betcdum2+0.5*betadum2*(2.-ki(kcol)))*&
-                      andum1**(0.5*betadum1*ki(kcol))*&
-                      gamma(nu+betcdum2+0.5*betadum2*(2.-ki(kcol)))*&
-                      gamma(nu+0.5*betadum1*ki(kcol))
-
-            ! Plates + Agg = Agg
-            ! Mass, Volume*Aspect Ratio, Number
-
-            parxfer = parxfer +   &
-            Cnk(kcol)*alphadum1**(0.5*betadum1*(2.-ki(kcol)))*&
-                      alphadum3**(0.5*betadum3*ki(kcol))*&
-                      andum1**(betmdum1+0.5*betadum1*(2.-ki(kcol)))*&
-                      andum3**(0.5*betadum3*ki(kcol))*&
-                      gamma(nu+betmdum1+0.5*betadum1*(2.-ki(kcol)))*&
-                      gamma(nu_agg+0.5*betadum3*ki(kcol))*&
-                      pbeta_colx(kcol)
-
-            pacxfer = pacxfer +   &
-            Cnk(kcol)*alphadum1**(0.5*betadum1*(2.-ki(kcol)))*&
-                      alphadum3**(0.5*betadum3*ki(kcol))*&
-                      andum1**(betcdum1+0.5*betadum1*(2.-ki(kcol)))*&
-                      andum3**(0.5*betadum3*ki(kcol))*&
-                      gamma(nu+betcdum1+0.5*betadum1*(2.-ki(kcol)))*&
-                      gamma(nu_agg+0.5*betadum3*ki(kcol))*&
-                      pbeta_colx(kcol)
-
-
-            paenxfer = paenxfer + &
-            Cnk(kcol)*alphadum1**(0.5*betadum1*(2.-ki(kcol)))*&
-                      alphadum3**(0.5*betadum3*ki(kcol))*&
-                      andum1**(0.5*betadum1*(2.-ki(kcol)))*&
-                      andum3**(0.5*betadum3*ki(kcol))*&
-                      gamma(nu+0.5*betadum1*(2.-ki(kcol)))*&
-                      gamma(nu_agg+0.5*betadum3*ki(kcol))*&
-                      pbeta_colx(kcol)
-
-
-            ! Columns + Agg = Agg
-            ! Mass, Volume*Aspect Ratio, Number
-
-
-            carxfer = carxfer + &
-            Cnk(kcol)*alphadum2**(0.5*betadum2*(2.-ki(kcol)))*&
-                      alphadum3**(0.5*betadum3*ki(kcol))*&
-                      andum2**(betmdum2+0.5*betadum2*(2.-ki(kcol)))*&
-                      andum3**(0.5*betadum3*ki(kcol))*&
-                      gamma(nu+betmdum2+0.5*betadum2*(2.-ki(kcol)))*&
-                      gamma(nu_agg+0.5*betadum3*ki(kcol))*&
-                      pbeta_colx(kcol)
-
-
-            cacxfer = cacxfer + &
-            Cnk(kcol)*alphadum2**(0.5*betadum2*(2.-ki(kcol)))*&
-                      alphadum3**(0.5*betadum3*ki(kcol))*&
-                      andum2**(betcdum2+0.5*betadum2*(2.-ki(kcol)))*&
-                      andum3**(0.5*betadum3*ki(kcol))*&
-                      gamma(nu+betcdum2+0.5*betadum2*(2.-ki(kcol)))*&
-                      gamma(nu_agg+0.5*betadum3*ki(kcol))*&
-                      pbeta_colx(kcol)
-
-
-            caenxfer = caenxfer + &
-            Cnk(kcol)*alphadum2**(0.5*betadum2*(2.-ki(kcol)))*&
-                      alphadum3**(0.5*betadum3*ki(kcol))*&
-                      andum2**(0.5*betadum2*(2.-ki(kcol)))*&
-                      andum3**(0.5*betadum3*ki(kcol))*&
-                      gamma(nu+0.5*betadum2*(2.-ki(kcol)))*&
-                      gamma(nu_agg+0.5*betadum3*ki(kcol))*&
-                      pbeta_colx(kcol)
-
-            ! Agg + Agg = Agg
-            ! Number
-
-            aaenxfer = aaenxfer + &
-            Cnk(kcol)*gamma(nu_agg+0.5*betadum3*(2.-ki(kcol)))*&
-                      gamma(nu_agg+0.5*betadum3*ki(kcol))*&
-                      pbeta_colx(kcol)*pbeta_coly(kcol)
-
-
-        enddo
-
-
-!---------------------------------------------------------------------------!
-        ! Self Collection
-        ! Mass
-        pprxfer = ndum1*ndum1*(Eff*effnew_pp*dvtm_dum(1)/(gamma(nu)*gamma(nu)))*&
-                   alphmdum1*alphadum1*andum1**(betmdum1+betadum1)*pprxfer
-
-        ccrxfer = ndum2*ndum2*(Eff*effnew_cc*dvtm_dum(2)/(gamma(nu)*gamma(nu)))*&
-                   alphmdum2*alphadum2*andum2**(betmdum2+betadum2)*ccrxfer
-
-        ! Volume*Aspect Ratio
-        ppcxfer = ndum1*ndum1*(Eff*effnew_pp*dvtc_dum(1)/(gamma(nu)*gamma(nu)))*&
-                  alphcdum1*alphadum1*andum1**(betcdum1+betadum1)*ppcxfer
-
-        cccxfer = ndum2*ndum2*(Eff*effnew_cc*dvtc_dum(2)/(gamma(nu)*gamma(nu)))*&
-                  alphcdum2*alphadum2*andum2**(betcdum2+betadum2)*cccxfer
-
-
-        ! Number
-        ppenxfer = ndum1*ndum1*(Eff*effnew_pp*dvtn_dum(1)/(gamma(nu)*gamma(nu)))*&
-                   alphadum1*andum1**(betadum1)*ppenxfer
-
-        ccenxfer = ndum2*ndum2*(Eff*effnew_cc*dvtn_dum(2)/(gamma(nu)*gamma(nu)))*&
-                   alphadum2*andum2**(betadum2)*ccenxfer
-
-
-        aaenxfer = ndum3*ndum3*(Eff*dvtn_dum(6)/(gamma(nu_agg)*gamma(nu_agg)))*&
-                   alphadum3*andum3**(betadum3)*aaenxfer
-
-
-
-
-
-!---------------------------------------------------------------------------!
-
-!---------------------------------------------------------------------------!
-       ! Cross Collection
-       ! Mass
-       pcrxfer =  ndum1*ndum2*(Eff*effnew_pc*dvtm_dum(3)/(gamma(nu)*gamma(nu)))*alphmdum1*pcrxfer
-
-       cprxfer =  ndum2*ndum1*(Eff*effnew_pc*dvtm_dum(4)/(gamma(nu)*gamma(nu)))*alphmdum2*cprxfer
-
-       parxfer =  ndum1*ndum3*(Eff*effnew_pp*dvtm_dum(5)/(gamma(nu)*gamma(nu_agg)))*alphmdum1*parxfer
-
-       carxfer =  ndum2*ndum3*(Eff*effnew_cc*dvtm_dum(6)/(gamma(nu)*gamma(nu_agg)))*alphmdum2*carxfer
-
-       ! Volume*Aspect Ratio
-
-       pccxfer =  ndum1*ndum2*(Eff*effnew_pc*dvtc_dum(3)/(gamma(nu)*gamma(nu)))*alphcdum1*pccxfer
-
-       cpcxfer =  ndum2*ndum1*(Eff*effnew_pc*dvtc_dum(4)/(gamma(nu)*gamma(nu)))*alphcdum2*cpcxfer
-
-       pacxfer =  ndum1*ndum3*(Eff*effnew_pp*dvtc_dum(5)/(gamma(nu)*gamma(nu_agg)))*alphcdum1*pacxfer
-
-       cacxfer =  ndum2*ndum3*(Eff*effnew_cc*dvtc_dum(6)/(gamma(nu)*gamma(nu_agg)))*alphcdum2*cacxfer
-
-       ! Number
-
-       pcenxfer = ndum1*ndum2*(Eff*effnew_pc*dvtn_dum(3)/(gamma(nu)*gamma(nu)))*pcenxfer
-
-       paenxfer = ndum1*ndum3*(Eff*effnew_pp*dvtn_dum(4)/(gamma(nu)*gamma(nu_agg)))*paenxfer
-
-       caenxfer = ndum2*ndum3*(Eff*effnew_cc*dvtn_dum(5))/(gamma(nu)*gamma(nu_agg))*caenxfer
-
-!---------------------------------------------------------------------------!
-
-
-  !.. Do not over-deplete mass from aggregation
-          sinkp = rcrossloss*pcrxfer + &
-                  rcrossloss*parxfer + &
-                  rselfloss*pprxfer
-          sourcep = qdum1
-
-          sinkc = rcrossloss*cprxfer + &
-                  rcrossloss*carxfer + &
-                  rselfloss*ccrxfer
-          sourcec = qdum2
-
-          if(sinkp.gt.sourcep.and.sourcep.gt.1.e-8) then
-             ratioagg= sourcep/sinkp
-             pcrxfer = pcrxfer*ratioagg
-             parxfer = parxfer*ratioagg
-             pprxfer = pprxfer*ratioagg
-          endif
-
-          if(sinkc.gt.sourcec.and.sourcec.gt.1.e-8) then
-             ratioagg= sourcec/sinkc
-             cprxfer = cprxfer*ratioagg
-             carxfer = carxfer*ratioagg
-             ccrxfer = ccrxfer*ratioagg
-          endif
-
-
-
-  !.. Do not over-deplete Volume*Aspect Ratio from aggregation
-        sinkp = rcrossloss*pccxfer + &
-        rcrossloss*pacxfer + &
-        rselfloss*ppcxfer
-        sourcep = vcdum1
-
-        if(sinkp.gt.sourcep.and.sourcep.gt.1.e-8) then
-        ratioagg= sourcep/sinkp
-        pccxfer = pccxfer*ratioagg
-        pacxfer = pacxfer*ratioagg
-        ppcxfer = ppcxfer*ratioagg
-        endif
-
-
-
- !.. (NEW) qagg is the mass tendency, nagg is the number tendency, vagg is the volume tendency, vcagg is the phi*V tendency
-          qagg1 = -rselfloss*pprxfer  - rcrossloss*pcrxfer  - rcrossloss*parxfer
-
-  !.. Do not over-deplete mass from aggregation
-          sinkp = (alphvdum1/alphmdum1)*qagg1
-          sourcep = Vadum1
-
-          if(sinkp.gt.sourcep.and.sourcep.gt.1.e-8) then
-             ratioagg= sourcep/sinkp
-             pcrxfer = pcrxfer*ratioagg
-             parxfer = parxfer*ratioagg
-             pprxfer = pprxfer*ratioagg
-          endif
-
-          vagg1 = (alphvdum1/alphmdum1)*&
-                  (-rselfloss*pprxfer  - rcrossloss*pcrxfer  - rcrossloss*parxfer)
-
-          vcagg1 = -rselfloss*ppcxfer  - rcrossloss*pccxfer  - rcrossloss*pacxfer
-          nagg1 = -nselfloss*ppenxfer - ncrossloss*pcenxfer - ncrossloss*paenxfer
-
-          qagg2 = -rselfloss*ccrxfer  - rcrossloss*cprxfer  - rcrossloss*carxfer
-
-          sinkc = (alphvdum2/alphmdum2)*qagg2
-          sourcec = Vadum2
-
-         if(sinkc.gt.sourcec.and.sourcec.gt.1.e-8) then
-             ratioagg= sourcec/sinkc
-             cprxfer = cprxfer*ratioagg
-             carxfer = carxfer*ratioagg
-             ccrxfer = ccrxfer*ratioagg
-         endif
-
-          vagg2 = (alphvdum2/alphmdum2)*&
-                  (-rselfloss*ccrxfer  - rcrossloss*cprxfer  - rcrossloss*carxfer)
-
-          vcagg2 = -rselfloss*cccxfer  - rcrossloss*cpcxfer  - rcrossloss*cacxfer
-          nagg2 = -nselfloss*ccenxfer - ncrossloss*pcenxfer - ncrossloss*caenxfer
-
-          qagg3 = -qagg1-qagg2
-          vagg3 = -vagg1-vagg2
-          vcagg3 = -vcagg1-vcagg2
-         !nagg3 = -nagg1-nagg2-nselfgain*aaenxfer !! NOTE: make sure to fix 1/2 coeff. (and rhoairdum) for gains in other versions.
-
-          nagg3 =nselfgain*(ppenxfer+ccenxfer+aaenxfer) + &
-                 ncrossgain*(pcenxfer+paenxfer+caenxfer)
-
-          nmon3 = -nagg1-nagg2
-
-         ! if (abs(nagg3).gt.0.) then
-         ! print*, 'nagg=',nagg3
-         ! print*, 'nmon3=',nmon3
-         ! stop
-         ! endif
-
-          qagg1 = min(qagg1,0.)
-          qagg2 = min(qagg2,0.)
-          qagg3 = max(qagg3,0.)
-
-          vagg1 = min(vagg1,0.)
-          vagg2 = min(vagg2,0.)
-          vagg3 = max(vagg3,0.)
-
-          vcagg1 = min(vcagg1,0.)
-          vcagg2 = min(vcagg2,0.)
-          vcagg3 = max(vcagg3,0.)
-
-          ! Scale by air density for numbers?
-          !nagg1 = nagg1/rhoairdum
-          !nagg2 = nagg2/rhoairdum
-          !nagg3 = nagg3/rhoairdum
-
-          !nmon3 = nmon3/rhoairdum
-
-
-
-!          nagg1 = min(nagg1,0.)
-!          nagg2 = min(nagg2,0.)
-!          nagg3 = max(nagg3,0.)
-
-
-
-         ! if (qdum3.gt.1e-6) then
-         ! print*, '-----------------'
-         ! print*, 'Mass before:',qdum1,qdum2,qdum3
-         ! print*, 'Number before:',ndum1,ndum2,ndum3
-         ! print*, 'Volume before:',vadum1,vadum2,vadum3
-         ! print*, 'Volume-C before:',vcdum1,vcdum2,vcdum3
-         ! print*, 'Mass transfer rates: Plates:', 'pprxfer=',pprxfer
-         ! print*, 'pcrxfer=',pcrxfer,'parxfer=',parxfer
-         ! print*, 'Number transfer rates: Plates:'
-         ! print*, 'ppenxfer=',ppenxfer,'pcenxfer=',pcenxfer
-         ! print*, 'Mass transfer rates: Columns:','ccrxfer=',ccrxfer
-         ! print*, 'cprxfer=',cprxfer, 'carxfer=',carxfer
-         ! print*, 'Number transfer rates: Columns:'
-         ! print*, 'ccenxfer=',ccenxfer,'caenxfer=',caenxfer
-         ! print*, 'Aggregate transfer:','aaenxfer=',aaenxfer
-         ! print*, 'total mass transfer:', qagg1+qagg2, qagg3
-         ! print*, 'new agg mass:', qdum1+qagg1,qdum2+qagg2,qdum3+qagg3
-         ! print*, 'new agg num:', ndum1+nagg1,ndum2+nagg2,ndum3+nagg3
-         ! print*, 'fallspeed terms:',dvtm_dum, dvtn_dum, dvtc_dum
-         ! stop
-
-         ! endif
-
-  end subroutine starbuck
-
-
-
-
-!----------------------------------------------------------------------------
-! Subroutine shape_diag
-!
-! ELD October 2019
-!
-! This subroutine uses new mass and volume mixing ratios to appropriately
-! diagnose an, ds, and rhobar after aggregation. This is necessary because
-! aggregation decreases both mass and volume, thus implicitly changing rhobar.
-! However, this diagnosis is tricky because the integrated volume mixing
-! ratios yield gamma function factors that incorporate deltastar. Therefore,
-! deltastar is diagnosed by taking the natural logarithm of the integrated
-! volumes and approximating loggamma factors using second order polynomials.
-! an is diagnosed from the new deltastar and the integrated volume (Va).
-! rhobar is more simply given as qi/Va.
-!-----------------------------------------------------------------------------
-
- subroutine shape_diag(gammnu,ni,qi,Via,Vic,ao,ds,astar,alphv,betam,ai,ci,ani,cni)
-
- real, parameter :: qasmall=1.e-20
-
- real, intent(INOUT) :: ani, cni,ai,ci,astar,alphv,betam
- real, intent(IN) :: gammnu, ao, ni, qi, Via, Vic
- real, intent(INOUT) :: ds
- real :: p1, p2, p3, Vi0, dsold, aniold, cniold,aiold,ciold
-
- ! Solve for Vi0
-
- Vi0 = (4./3.)*PI*ao**3.*ni
-
- dsold = ds
- aniold = ani
- cniold =cni
- aiold = ai
- ciold = ci
-
- ! First, get appropriate polynomial coefficients
- if(nu.eq.1.) then
-    p1 = 1.278
-    p2 = -0.5793
-    p3 = -0.6989
- elseif(nu.eq.4.) then
-
-    p1 = 0.6888
-    p2 = -0.536
-    p3 = -0.1528
-
- else
- print*, 'input nu needs to be either 1 or 4 currently'
- endif
-
- p2 = p2+log(Via**2/(Vi0*Vic))
- p3 = p3+log(Vi0*Via/(Vic**2))
-
-
- !p2 = p2+2.*log(Via)-log(Vi0)-log(Vic)
- !p3 = p3+log(Vi0)+log(Via)-2.*log(Vic)
-
- !print*, 'p2=',p2
- !print*, 'p3=',p3
- !print*, 'Via=',log(Via)
- !print*, 'Vic=',log(Vic)
- !print*, 'ao=',ao
- !print*, 'nu=',nu
-
- ! Now, use quadratic formula to get new ds
-
- ds = (-p2-sqrt(p2*p2 - 4.*p1*p3))/(2.*p1)
-
- if (ds.lt.0..or.ds.gt.5.) then
-
-  ds =(-p2+sqrt(p2*p2 - 4.*p1*p3))/(2.*p1)
-
- endif
-
-
-
- !print*,'ds=',ds
-
- ds = min(max(ds,0.55),1.5)
-
- !print*, 'ds_diag=', ds
-
-
- !print*, 'Viadum=',via
- !print*, 'ai_old=',ai
- !print*, 'ani_old=',ani
-
- betam = 2.+ds
- astar = ao**(1.-ds)
- alphv = (4./3.)*PI*astar
- ani = ao*((Via/Vi0)*(gammnu/gamma(nu+betam)))**(1./betam)
- cni =  astar*ani**ds
- ai = max(ani**2*cni*ni,qasmall) ! Volume-a (as described by an^2*cn)
- ci = max(ani*cni**2*ni,qasmall) ! Volume-c (as described by cn^2*an)
-
-
-
- !if(dsold.lt.0.99) then
- ! print*, 'dsold=',dsold
- ! print*, 'dsnew=',ds
- ! print*, 'aniold=',aniold
- ! print*, 'ani=',ani
- ! print*, 'cniold=',cniold
- ! print*, 'cni=',cni
- ! print*, 'aiold=',aiold
- ! print*, 'ai=',ai
- ! print*, 'ciold=',ciold
- ! print*, 'ci=',ci
-
-  !print*, p2,p3
- ! print*, Via, Vic
- ! stop
- !endif
-
- !ai = max(NU*ni*ani,qasmall)
- !ci = max(NU*ni*cni,qasmall)
-
-
-
-
- end subroutine shape_diag
-!------------------------------------------------------------------------
 
   !--------------------------------------------------------------------------------------------------------------!
   !--------------------------------------------------------------------------------------------------------------!
@@ -5664,7 +3851,860 @@ endif
     
   end function get_igr
 
+  !--------------------------------------------------------------------------------------------------------------!
+  !--------------------------------------------------------------------------------------------------------------!
+  !.. Aggregation routine (see Jensen et al. 2017, implentation by JYH and AAJ)
+  !.. See Walko et al. 1995 and Meyers et al. 1997 for more details
+  subroutine aggregation(dtdum,rhoairdum,tempdum,qdum1,ndum1,ddum1,qdum2,ndum2,ddum2, &
+       qdum3,ndum3,ddum3,rhodum1,rhodum2,phidum1,phidum2,coltab,coltabn,              &
+       qagg1,qagg2,qagg3,nagg1,nagg2,nagg3)
 
+    implicit none
+    
+    real, parameter :: QNSMALL= 1.25e-7   ! Smallest ice number
+    integer icat,k,kp1,kp2,isnow,ipris,it,ihab,jhab
+    integer, parameter :: ncat=7,npair=35,ndn=60,nftab=1000,ngam=5000,nz=1
+    real, parameter :: rsmall=1.e-12
+    real gnu(ncat),shape(ncat),cfmas(ncat),pwmas(ncat),&
+         cfden(ncat),pwden(ncat)&
+         ,cfvt(ncat),pwvt(ncat),tablo(ncat),tabhi(ncat),tabloln(ncat),&
+         tabhiln(ncat)&
+         ,dnmin(ncat),dnmax(ncat),vtfac(ncat),pow1(ncat),pow2(ncat),&
+         frefac1(ncat)&
+         ,frefac2(ncat),cfmasft(ncat),dict(ncat),dbmi(ncat),&
+         gamm(ncat),gamn1(ncat)&
+         ,gam(ngam,ncat),ncrossloss,rcrossloss,nselfloss,&
+         rselfloss,ncrossgain,rcrossgain,nselfgain,rselfgain
+    real rictmin,rictmax,rict,rictmm,dtlt,totalc(nz),totaldc(nz)
+    real dn(nz,ncat),en(nz,ncat),qr(nz,ncat),r(nz,ncat),qq(nz,ncat)
+    real wct1(nz,ncat),wct2(nz,ncat),rxfer(nz,ncat,ncat),&
+         qrxfer(nz,ncat,ncat),enxfer(nz,ncat,ncat),&
+         parxfer(nz,ncat,ncat), paqrxfer(nz,ncat,ncat),&
+         paenxfer(nz,ncat,ncat), pprxfer(nz,ncat,ncat),&
+         ppqrxfer(nz,ncat,ncat), ppenxfer(nz,ncat,ncat)
+    real qs(nz),ns(nz),dns(nz),qa(nz),na(nz),dna(nz)
+    real t(nz,ncat),tc(nz),rhoa(nz),tk(nz),denfac(nz),eff(nz)
+    real ftable(nftab,ncat)
+    real, intent(IN) :: coltab(ndn,ndn,npair),coltabn(ndn,ndn,npair)
+    integer ipair(ncat,ncat),ict(nz,ncat)
+    real, dimension(ncat,9) :: dstprms
+    real, intent(IN) :: qdum1,ndum1,qdum2,ndum2,qdum3,ndum3,ddum1,ddum2
+    real, intent(INOUT) :: qagg1,qagg2,qagg3,nagg1,nagg2,nagg3,ddum3
+    real, intent(IN) :: rhodum1, rhodum2, phidum1, phidum2
+    real :: rhoeff, phieff, rhoeffmax, phieffmax, efffact
+    real :: source3, sink3, source4, sink4, ratioagg
+    real, intent(IN) :: dtdum, rhoairdum, tempdum
+    
+    dstprms=&
+         !-----------------------------------------------------------------------                                
+         !-----------------------------------------------------------------------                                
+         !        cloud     rain    planar     columnar   aggreg    graup     hail                               
+         !          1         2       3         4       5        6         7   ---> ncat                         
+         !-----------------------------------------------------------------------                                
+         reshape((/.5,      .5,    .318,    .318,      .5,      .5,      .5,   &!shape  (capacitance shape)
+         524.,    524.,    .333,    .333,    .496,    157.,    471.,           &!cfmas   (m=cfmas*D**pwmas)
+         3.,      3.,     2.4,     2.4,     2.4,      3.,      3.,             &!pwmas                      
+         3173.,    149.,    4.836,   4.836,   3.084,    93.3,    161.,         &!cfvt   (v = cfvt*D**pwvt)  
+         2.,      .5,    0.25,     .25,      .2,      .5,      .5,             &!pwvt                       
+         1.e-6,   1.e-6,   1.e-6,   1.e-6,   1.e-6,   1.e-6,   1.e-6,          &!tablo  (size limits for table)
+         1.e-2,   1.e-2,   1.e-2,   1.e-2,   1.e-2,   1.e-2,   1.e-2,          &!tabhi                      
+         .1e-5,   .1e-4,   .1e-5,   .1e-5,   .1e-4,   .1e-4,   .1e-4,          &!dnmin  (characteristic diam  
+         .1e-2,   .1e-1,   .1e-1,   .1e-1,   .1e-1,   .1e-1,   .1e-1/),        &!dnmax      limits)         
+         (/ncat,9/))
+  !-----------------------------------------------------------------------                                
+
+    ipair=&
+         reshape((/0,0,3,7,11,15,19          ,1,0,5,9,13,17,21 &              ! collection pairs            
+       ,2,4,22,24,0,0,0           ,6,8,23,28,0,0,0           &
+       ,10,12,25,29,35,0,0         ,14,16,26,30,32,0,0        &
+       ,18,20,27,31,33,34,0/),                               &
+       (/ncat,ncat/))
+    
+    do icat=1,ncat
+       shape(icat)=dstprms(icat,1)
+       cfmas(icat)=dstprms(icat,2)
+       pwmas(icat)=dstprms(icat,3)
+       cfvt (icat)=dstprms(icat,4)
+       pwvt (icat)=dstprms(icat,5)
+       tablo(icat)=dstprms(icat,6)
+       tabhi(icat)=dstprms(icat,7)
+       dnmin(icat)=dstprms(icat,8)
+       dnmax(icat)=dstprms(icat,9)
+       gnu(icat) = 4.0   ! shape distribution                                                               
+       
+       tabloln(icat)=log(tablo(icat))
+       tabhiln(icat)=log(tabhi(icat))
+       dict(icat) = float(ndn - 1) / (tabhiln(icat) - tabloln(icat))
+    enddo
+    rictmin=1.0001
+    rictmax=0.9999*float(ndn)
+    
+  !.. Collection integral multipliers for number and mass mixing ratio loss                                 
+  !.. due to self collection from a cateogry. Multipliers for the gain term                                 
+  !.. for aggregates given as well. Below this are the multipliers for                                      
+  !.. cross collection. These should be correct but a more detailed                                         
+  !.. mathematical treatment is warranted. JYH Sept 2016.                                                   
+    nselfloss = 1.
+    rselfloss = 1.
+    nselfgain = 1./2.
+    rselfgain = 1.0
+    
+    ncrossloss = 1.
+    rcrossloss = 1.0
+    ncrossgain = 1./2.
+    rcrossgain = 1.0
+
+  !.. Assumed mass-size coefficients
+    pwmas(3) = 3.0
+    cfmas(3) =  3.14159/6.*250.*0.05
+    pwmas(4) = 3.0
+    cfmas(4) =  3.14159/6.*250.*0.05
+    pwmas(5) = 3.0
+    cfmas(5) =  3.14159/6.*50.*0.2
+  
+    dtlt = dtdum ! time step                                                                                  
+    kp1  = 1
+    kp2  = nz
+    ipris= 5  ! double moment                                                                              
+
+  !.. collection routine                                                                                    
+  !.. nz = # vertical levels                                                                                
+  !.. kp1 = lowest level with cloud                                                                         
+  !.. kp2 = higest level with cloud                                                                         
+  !.. 3 => the first is the collector                                                                       
+  !.. 3 => the second is the collectee                                                                      
+  !.. 5 => where the collection goes (aggregates)                                                           
+  !.. dn(nz,ncat) = characteristic diameter                                                                 
+  !.. en(nz,ncat) = number concentration                                                                    
+  !.. r(nz,ncat) = mass mixing ratio                                                                        
+  !.. qr(nz,ncat) = hydrometeor internal enthalpy                                                           
+  !.. qq(nz,ncat) = hydrometeor temperature (internal energy)                                               
+  !.. t(nz,ncat) = hydrometeor temperature (air temperature)                                                
+  !.. ict,wct1,wct2 -> table interpolation                                                                  
+  !.. rhoa(nz) = air density                                                                                
+  !.. denfac(nz) = sqrt(1/rhoa)                                                                             
+  !.. eff(nz) = collection efficiency                                                                       
+  !.. ipris = 5 double moment                                                                               
+  !.. rxfer(nz,ncat,ncat) = change in mass mixing ratio due to collection                                   
+  !.. enxfer(nz,ncat,ncat) = change in number concentration due to collection                               
+  !.. qrxfer(nz,ncat,ncat) = change in internal energy due to collection                                    
+  !.. ipair,2 -> 2 is for self-collection, 1 if cross collection                                            
+
+    do k = 1,nz !.. nz = 1 currently (the k loop is done outsize of this routine)
+       rhoa(k) = rhoairdum
+       tk(k)   = tempdum
+       
+       denfac(k) = sqrt(1./rhoa(k))
+       dn(k,3) = ddum1
+       en(k,3) = ndum1*rhoa(k)
+       r(k,3)  = qdum1
+       
+       dn(k,4) = ddum2
+       en(k,4) = ndum2*rhoa(k)
+       r(k,4) =  qdum2
+       
+       qr(k,3) = 0.0 !.. internal energy... not needed so pass in zero                                        
+       qq(k,3) = t(k,3)
+       t(k,3) = tk(k) - 273.15
+       qr(k,4) = 0.0 !.. internal energy... not needed so pass in zero                               
+       qq(k,4) = t(k,3)
+       t(k,4) = t(k,3)
+       qr(k,5) = 0.0
+       qq(k,5) = t(k,5)
+       t(k,5) = t(k,3)
+       
+       dn(k,5) = ddum3
+       en(k,5) = ndum3*rhoa(k)
+       r(k,5) =  qdum3
+
+       totaldc(k)=0.
+    enddo
+
+    do it = 1,1    !.. One timestep at a time
+       do k = 1,nz !.. One vertical grid at a time
+
+          do ihab = 1,7
+             do jhab = 1,7
+  
+  !.. planar = qice, columnar=qice2, aggregates = qice3
+  !.. planar + columnar = aggregates (qice + qice2 -> qice3)                                                             
+                rxfer(k,ihab,jhab) = 0.0
+                enxfer(k,ihab,jhab) = 0.0
+                qrxfer(k,ihab,jhab) = 0.0
+                rxfer(k,ihab,jhab) = 0.0
+                enxfer(k,ihab,jhab) = 0.0
+                qrxfer(k,ihab,jhab) = 0.0
+                
+  !.. planar + aggregates = aggregates                                                                         
+                parxfer(k,ihab,jhab) = 0.0
+                paenxfer(k,ihab,jhab) = 0.0
+                paqrxfer(k,ihab,jhab) = 0.0
+                
+  !.. columnar + aggregates = aggregates                                                                        
+                parxfer(k,ihab,jhab) = 0.0
+                paenxfer(k,ihab,jhab) = 0.0
+                paqrxfer(k,ihab,jhab) = 0.0
+                
+  !.. Self collection (aggregates)                                                                            
+                pprxfer(k,ihab,jhab) = 0.0
+                ppenxfer(k,ihab,jhab) = 0.0
+                ppqrxfer(k,ihab,jhab) = 0.0
+                pprxfer(k,ihab,jhab) = 0.0
+                ppenxfer(k,ihab,jhab) = 0.0
+                ppqrxfer(k,ihab,jhab) = 0.0
+             enddo
+          enddo
+          
+  !.. needed for table interpolation                                                                  
+          rict=dict(3)*(log(max(1.e-10,dn(k,3)))-tabloln(3))+1.
+          rictmm=max(rictmin,min(rictmax,rict))
+          ict(k,3)=int(rictmm)
+          wct2(k,3)=rictmm-float(ict(k,3))
+          wct1(k,3)=1.0-wct2(k,3)
+          
+  !.. needed for table interpolation                                                                  
+          rict=dict(4)*(log(max(1.e-10,dn(k,4)))-tabloln(4))+1.
+          rictmm=max(rictmin,min(rictmax,rict))
+          ict(k,4)=int(rictmm)
+          wct2(k,4)=rictmm-float(ict(k,4))
+          wct1(k,4)=1.0-wct2(k,4)
+          
+  !.. needed for table interpolation                                                                  
+          rict=dict(5)*(log(max(1.e-10,dn(k,5)))-tabloln(5))+1.
+          rictmm=max(rictmin,min(rictmax,rict))
+          ict(k,5)=int(rictmm)
+          wct2(k,5)=rictmm-float(ict(k,5))
+          wct1(k,5)=1.0-wct2(k,5)
+          
+          totalc(k)=0.
+       enddo
+       
+  !.. planar + columnar = aggregates
+  !.. let high density reduce the collection efficiency
+       rhoeffmax = max(rhodum1,rhodum2)
+       phieffmax = max(min(phidum1,1./phidum1),min(phidum2,1./phidum2))
+       if(rhoeffmax.le.400.) then
+          rhoeff = 1.
+       else
+          rhoeff = -0.001923*rhoeffmax + 1.76916
+       endif
+       rhoeff = max(rhoeff,0.)
+       rhoeff = min(rhoeff,1.)
+       
+  !.. Spherical particles collect less efficiently than more extreme
+  !.. particle shapes
+  !.. Based on Connolly et al 2012
+  !.. See Jensen et al. 2018b
+       if(phieffmax.le.0.03) then
+          phieff = 1.
+       elseif(phieffmax.gt.0.03.and.phieffmax.lt.0.5) then
+          phieff = 0.0001*((phieffmax+0.07)**(-4.))
+       else
+          phieff = 0.
+       endif
+       
+       if(phieff.le.0.001) then
+          phieff = 0.
+       endif
+       
+       phieff = max(phieff,0.01) !.. Low limit currently set to 0.01 AAJ
+       phieff = min(phieff,1.)
+       efffact = phieff * rhoeff
+       
+       call col1 &
+            (nz,kp1,kp2,ndn,ncat,3,4,5 &
+            ,dtlt,dn,en,r,qr,qq,t,ict,wct1,wct2,rhoa,denfac,coltab &
+            ,coltabn,ipair,1.,eff,efffact,ipris,rxfer,qrxfer,enxfer)
+       call col1 &
+            (nz,kp1,kp2,ndn,ncat,4,3,5 &
+            ,dtlt,dn,en,r,qr,qq,t,ict,wct1,wct2,rhoa,denfac,coltab &
+            ,coltabn,ipair,1.,eff,efffact,ipris,rxfer,qrxfer,enxfer)
+       
+  !.. plates + aggregates = aggregates
+       rhoeffmax = rhodum1
+       phieffmax = min(phidum1,1./phidum1)
+       
+       if(rhoeffmax.le.400.) then
+          rhoeff = 1.
+       else
+          rhoeff = -0.001923*rhoeffmax + 1.76916
+       endif
+       rhoeff = max(rhoeff,0.)
+       rhoeff = min(rhoeff,1.)
+
+  !.. Based on Connolly et al 2012
+  !.. See Jensen et al. 2018b
+       if(phieffmax.le.0.03) then
+          phieff = 1.
+       elseif(phieffmax.gt.0.03.and.phieffmax.lt.0.5) then
+          phieff = 0.0001*((phieffmax+0.07)**(-4.))
+       else
+          phieff = 0.
+       endif
+       
+       if(phieff.le.0.001) then
+          phieff = 0.
+       endif
+
+       phieff = max(phieff,0.01)
+       phieff = min(phieff,1.)
+       efffact = phieff * rhoeff
+       
+       call col1 &
+            (nz,kp1,kp2,ndn,ncat,3,5,5 &
+            ,dtlt,dn,en,r,qr,qq,t,ict,wct1,wct2,rhoa,denfac,coltab &
+            ,coltabn,ipair,1.,eff,efffact,ipris,parxfer,paqrxfer,paenxfer)
+       
+  !.. Columnar + Aggregates = Aggregates
+       rhoeffmax = rhodum2
+       phieffmax = min(phidum2,1./phidum2)
+       
+       if(rhoeffmax.le.400.) then
+          rhoeff = 1.
+       else
+          rhoeff = -0.001923*rhoeffmax + 1.76916
+       endif
+       rhoeff = max(rhoeff,0.)
+       rhoeff = min(rhoeff,1.)
+       
+  !.. Based on Connolly et al 2012
+  !.. See Jensen et al. 2018b
+       if(phieffmax.le.0.03) then
+          phieff = 1.
+       elseif(phieffmax.gt.0.03.and.phieffmax.lt.0.5) then
+          phieff = 0.0001*((phieffmax+0.07)**(-4.))
+       else
+          phieff = 0.
+       endif
+       
+       if(phieff.le.0.001) then
+          phieff = 0.
+       endif
+       
+       phieff = max(phieff,0.01)
+       phieff = min(phieff,1.)
+       efffact = phieff * rhoeff
+       
+       call col1 &
+          (nz,kp1,kp2,ndn,ncat,4,5,5 &
+          ,dtlt,dn,en,r,qr,qq,t,ict,wct1,wct2,rhoa,denfac,coltab &
+          ,coltabn,ipair,1.,eff,efffact,ipris,parxfer,paqrxfer,paenxfer)
+       
+  !.. Plates + Plates = Aggregates
+       rhoeffmax = rhodum1
+       phieffmax = min(phidum1,1./phidum1)
+       
+       if(rhoeffmax.le.400.) then
+          rhoeff = 1.
+       else
+          rhoeff = -0.001923*rhoeffmax + 1.76916
+       endif
+       rhoeff = max(rhoeff,0.)
+       rhoeff = min(rhoeff,1.)
+       
+  !.. Based on Connolly et al 2012
+  !.. See Jensen et al. 2018b
+       if(phieffmax.le.0.03) then
+          phieff = 1.
+       elseif(phieffmax.gt.0.03.and.phieffmax.lt.0.5) then
+          phieff = 0.0001*((phieffmax+0.07)**(-4.))
+       else
+          phieff = 0.
+       endif
+     
+       if(phieff.le.0.001) then
+          phieff = 0.
+       endif
+       
+       phieff = max(phieff,0.01)
+       phieff = min(phieff,1.)
+       efffact = phieff * rhoeff
+       
+       call col1 &
+            (nz,kp1,kp2,ndn,ncat,3,3,5 &
+            ,dtlt,dn,en,r,qr,qq,t,ict,wct1,wct2,rhoa,denfac,coltab &
+            ,coltabn,ipair,1.,eff,efffact,ipris,pprxfer,ppqrxfer,ppenxfer)
+       
+  !.. Columns + Columns = Aggregates
+       rhoeffmax = rhodum2
+       phieffmax = min(phidum2,1./phidum2)
+       
+       if(rhoeffmax.le.400.) then
+          rhoeff = 1.
+       else
+          rhoeff = -0.001923*rhoeffmax + 1.76916
+       endif
+       rhoeff = max(rhoeff,0.)
+       rhoeff = min(rhoeff,1.)
+       
+  !.. Based on Connolly et al 2012
+  !.. See Jensen et al. 2018b
+       if(phieffmax.le.0.03) then
+          phieff = 1.
+       elseif(phieffmax.gt.0.03.and.phieffmax.lt.0.5) then
+          phieff = 0.0001*((phieffmax+0.07)**(-4.))
+       else
+          phieff = 0.
+       endif
+       
+       if(phieff.le.0.001) then
+          phieff = 0.
+       endif
+       
+       phieff = max(phieff,0.01)
+       phieff = min(phieff,1.)
+       efffact = phieff * rhoeff
+       
+       call col1 &
+            (nz,kp1,kp2,ndn,ncat,4,4,5 &
+            ,dtlt,dn,en,r,qr,qq,t,ict,wct1,wct2,rhoa,denfac,coltab &
+            ,coltabn,ipair,1.,eff,efffact,ipris,pprxfer,ppqrxfer,ppenxfer)
+       
+       efffact=1.
+  !.. Aggregate self collection                                                                         
+       call col1 &
+            (nz,kp1,kp2,ndn,ncat,5,5,5 &
+            ,dtlt,dn,en,r,qr,qq,t,ict,wct1,wct2,rhoa,denfac,coltab &
+            ,coltabn,ipair,1.,eff,efffact,ipris,pprxfer,ppqrxfer,ppenxfer)
+       
+       do k = 1,nz
+          
+  !.. Do not over-deplete from aggregation
+          sink3 = rcrossloss*rxfer(k,3,5) + &
+               rcrossloss*parxfer(k,3,5) + &
+               rselfloss*pprxfer(k,3,5)
+          source3 = r(k,3)
+          
+          sink4 = rcrossloss*rxfer(k,4,5) + &
+               rcrossloss*parxfer(k,4,5) + &
+               rselfloss*pprxfer(k,4,5)
+          source4 = r(k,4)
+          
+          if(sink3.gt.source3.and.source3.gt.1.e-8) then
+             ratioagg= source3/sink3
+             rxfer(k,3,5) = rxfer(k,3,5)*ratioagg
+             parxfer(k,3,5) = parxfer(k,3,5)*ratioagg
+             pprxfer(k,3,5) = pprxfer(k,3,5)*ratioagg
+          endif
+          
+          if(sink4.gt.source4.and.source4.gt.1.e-8) then
+             ratioagg= source4/sink4
+             rxfer(k,4,5) = rxfer(k,4,5)*ratioagg
+             parxfer(k,4,5) = parxfer(k,4,5)*ratioagg
+             pprxfer(k,4,5) = pprxfer(k,4,5)*ratioagg
+          endif
+
+          totaldc(k)=totaldc(k) + &
+               ncrossloss*enxfer(k,3,5)+ncrossloss*paenxfer(k,3,5)+ &
+               nselfloss*ppenxfer(k,3,5)+ &
+               ncrossloss*enxfer(k,4,5)+ncrossloss*paenxfer(k,4,5)+ &
+               nselfloss*ppenxfer(k,4,5)
+
+  !.. qagg is the mass tendency, nagg is the number tendency         
+          qagg1 = -rcrossloss*rxfer(k,3,5) - rcrossloss*parxfer(k,3,5) - rselfloss*pprxfer(k,3,5)
+          nagg1 = -ncrossloss*enxfer(k,3,5) - ncrossloss*paenxfer(k,3,5) - nselfloss*ppenxfer(k,3,5)
+
+          qagg2 = -rcrossloss*rxfer(k,4,5) - rcrossloss*parxfer(k,4,5) - rselfloss*pprxfer(k,4,5)
+          nagg2 = -ncrossloss*enxfer(k,4,5) - ncrossloss*paenxfer(k,4,5) - nselfloss*ppenxfer(k,4,5)
+
+          qagg3 = rcrossgain*rxfer(k,3,5) + rcrossgain*rxfer(k,4,5) + rcrossgain*parxfer(k,3,5) + &
+               rcrossgain*parxfer(k,4,5) + rselfgain*pprxfer(k,3,5) + rselfgain*pprxfer(k,4,5)
+          nagg3 = ncrossgain*enxfer(k,3,5) + ncrossgain*enxfer(k,4,5) + nselfgain*ppenxfer(k,3,5) + &
+               nselfgain*ppenxfer(k,4,5) - 0.5*ppenxfer(k,5,5)
+
+          qagg1 = min(qagg1,0.)
+          qagg2 = min(qagg2,0.)
+          qagg3 = max(qagg3,0.)
+
+  !.. Update to characteristic diameters after aggregation
+  !.. Note that for ice-one and ice-two, the axes will be re-diagnosed
+  !.. after aggregation based on delta*, so only output aggregation size
+          dn(k,5) = ((r(k,5)+qagg3)*rhoa(k)/(MAX((en(k,5)+nagg3),QNSMALL)*cfmas(5) &
+               *(gamma(gnu(5)+ &
+               pwmas(5)))/(gamma(gnu(5))) ) )**(1./pwmas(5))
+          ddum3=dn(k,5)
+
+          nagg1 = nagg1/rhoa(k)
+          nagg2 = nagg2/rhoa(k)
+          nagg3 = nagg3/rhoa(k)
+          
+          totalc(k)=0.
+          totalc(k) = en(k,3)+en(k,4) + 0.
+          
+          rxfer(k,3,5) = 0.0
+          enxfer(k,3,5) = 0.0
+          qrxfer(k,3,5) = 0.0
+          
+          rxfer(k,4,5) = 0.0
+          enxfer(k,4,5) = 0.0
+          qrxfer(k,4,5) = 0.0
+       enddo
+    enddo
+
+  end subroutine aggregation
+
+  !--------------------------------------------------------------------------------------------------------------!
+  !--------------------------------------------------------------------------------------------------------------!
+  !.. Needed for the aggregation routine
+  subroutine col1(n1,k1,k2,ndn,ncat,mx,my,mz,dtlt,dn,en,r,qr,qq,t &
+       ,ict,wct1,wct2,dn0,denfac,coltab,coltabn,ipair,cr,eff,efdum,icf &
+       ,rxfer,qrxfer,enxfer)
+    integer ict(n1,*),ipair(ncat,ncat), ndn, ncat,n1
+    real dn(n1,*),en(n1,*),r(n1,*),qr(n1,*),qq(n1,*),t(n1,*) &
+         ,wct1(n1,*),wct2(n1,*),dn0(*),denfac(*) &
+         ,coltab(ndn,ndn,*),eff(*),coltabn(ndn,ndn,*) &
+         ,rxfer(n1,ncat,ncat),qrxfer(n1,ncat,ncat),enxfer(n1,ncat,ncat)
+    integer :: k1, k2, mx, my, mz, icf, k, ip
+    real :: dtlt, cr, csizei, tmax, colamt, colamtn, wght, deltan,efdum
+
+    ip=ipair(mx,my)
+    csizei=7.e4
+
+    do k=k1,k2
+
+       tmax=max(t(k,mx),t(k,my))
+
+  !.. efdum added by AAJ from ramsagg
+  !.. if takes into account the shape and density 
+  !.. dependence on the collection efficiency
+       eff(k)=min(0.2,10.**(0.035*tmax-0.7))*efdum
+       
+       if(my.eq.6.and.qr(k,6).gt.0)eff(k)=1.
+       if(my.eq.7.and.qr(k,7).gt.0)eff(k)=1.
+
+  !.. see note above on efdum
+       if(mz.eq.5.and.abs(t(k,mx)+14.).le.2.)eff(k)=1.4*efdum
+       
+       if(mx.eq.1)eff(k)=min(1.,dn(k,1)*csizei)
+
+       colamt=dtlt*cr*0.785*eff(k)*denfac(k)/dn0(k) &
+            *en(k,mx)*en(k,my)*( &
+            wct1(k,mx)*wct1(k,my)*coltab(ict(k,mx)  ,ict(k,my)  ,ip) &
+            +wct2(k,mx)*wct1(k,my)*coltab(ict(k,mx)+1,ict(k,my)  ,ip) &
+            +wct1(k,mx)*wct2(k,my)*coltab(ict(k,mx)  ,ict(k,my)+1,ip) &
+            +wct2(k,mx)*wct2(k,my)*coltab(ict(k,mx)+1,ict(k,my)+1,ip))
+
+       colamt=min(colamt,r(k,mx))
+       rxfer(k,mx,mz) = rxfer(k,mx,mz) + colamt
+       qrxfer(k,mx,mz) = qrxfer(k,mx,mz) + colamt * qq(k,mx)
+
+       colamtn=dtlt*cr*0.785*eff(k)*denfac(k)/dn0(k) &
+            *en(k,mx)*en(k,my)*( &
+            wct1(k,mx)*wct1(k,my)*coltabn(ict(k,mx)  ,ict(k,my)  ,ip) &
+            +wct2(k,mx)*wct1(k,my)*coltabn(ict(k,mx)+1,ict(k,my)  ,ip) &
+            +wct1(k,mx)*wct2(k,my)*coltabn(ict(k,mx)  ,ict(k,my)+1,ip) &
+            +wct2(k,mx)*wct2(k,my)*coltabn(ict(k,mx)+1,ict(k,my)+1,ip))
+
+       colamtn=min(colamtn,en(k,mx))
+       
+       if(icf.eq.5)then
+          
+          wght = min(max(0.,100.*abs(colamt)/max(1.e-20,r(k,mx))),1.)
+          deltan = colamtn*(1.-wght) + &
+             wght*en(k,mx) * colamt / max(1.e-20,r(k,mx))
+          enxfer(k,mx,mz) = enxfer(k,mx,mz) + deltan
+          
+       endif
+
+    enddo
+    return
+  end subroutine col1
+
+  !--------------------------------------------------------------------------------------------------------------!
+  !--------------------------------------------------------------------------------------------------------------!
+  !.. Needed for the aggregation routine
+  subroutine mkcoltb(ndn,ncat,coltab,coltabn,ipair,gnu,tablo,tabhi &
+       ,cfmas,pwmas,cfvt,pwvt)
+    integer :: ncat
+    real :: coltab(ndn,ndn,35),gnu(ncat) &
+         ,tablo(ncat), tabhi(ncat), cfmas(ncat),pwmas(ncat) &
+         ,cfvt(ncat), pwvt(ncat), coltabn(ndn,ndn,35)
+    integer :: ipair(ncat,ncat), ix, iy, idny, idnx, idx, ndn
+    integer, parameter :: ndx=20
+    real :: dx(ndx),gx(ndx),fx(20), gyn,gyn1,gyn2,gynp1,gynp2,gynp
+    real :: dxhi, dny, vny, dxlo, dnx, ans
+
+    do ix=1,ncat
+       do iy=1,ncat
+          if(ipair(ix,iy).gt.0)then
+             gyn=(gamma(gnu(iy)))
+             gyn1=(gamma(gnu(iy)+1.))/gyn
+             gyn2=(gamma(gnu(iy)+2.))/gyn
+             gynp=(gamma(gnu(iy)+pwvt(iy)))/gyn
+             gynp1=(gamma(gnu(iy)+pwvt(iy)+1.))/gyn
+             gynp2=(gamma(gnu(iy)+pwvt(iy)+2.))/gyn
+             dxlo=tablo(ix)*0.01
+             dxhi=tabhi(ix)*10.0
+             do idny=1,ndn
+                dny=tablo(iy)*(tabhi(iy)/tablo(iy))**(float(idny-1) &
+                     /float(ndn-1))
+                vny=cfvt(iy)*dny**pwvt(iy)
+                do idnx=1,ndn
+                   dnx=tablo(ix)*(tabhi(ix)/tablo(ix))**(float(idnx-1) &
+                        /float(ndn-1))
+                   do idx=1,ndx
+                      dx(idx)=dxlo*(dxhi/dxlo) &
+                           **(float(idx-1)/float(ndx-1))
+                      fx(idx) = xjnum(dx(idx),cfvt(ix),pwvt(ix),cfvt(iy) &
+                           ,pwvt(iy),vny,dnx,dny,gnu(ix),gnu(iy) &
+                           ,gyn1,gyn2,gynp,gynp1,gynp2)
+                      if(fx(idx).lt.1.e-15) then !.. low limit added by AAJ
+                         fx(idx) = 0.
+                      endif
+                      gx(idx) = fx(idx) * cfmas(ix) &
+                           * dx(idx) ** pwmas(ix)
+                   enddo
+                   call avint(dx,gx,ndx,dxlo,dxhi,ans)
+                   coltab(idnx,idny,ipair(ix,iy))=max(0.,ans)
+                   call avint(dx,fx,ndx,dxlo,dxhi,ans)
+                   coltabn(idnx,idny,ipair(ix,iy))=max(0.,ans)
+                enddo
+             enddo
+          endif
+       enddo
+    enddo
+    return
+  end subroutine mkcoltb
+
+  !--------------------------------------------------------------------------------------------------------------!
+  !--------------------------------------------------------------------------------------------------------------!
+  !.. Needed for the aggregation routine
+  function xjnum(dx,cvx,pvx,cvy,pvy,vny,dnx,dny,xnu,ynu &
+       ,gyn1,gyn2,gynp,gynp1,gynp2)
+    implicit none
+    
+    real :: dx,cvx,pvx,cvy,pvy,vny,dnx,dny,xnu,ynu,gyn1,gyn2,gynp, &
+         gynp1,gynp2,xjnum  &
+         ,dnxi,rdx,vx,dxy,ynup
+    
+    dnxi = 1. / dnx
+    rdx = dx * dnxi
+    vx = max((cvx * dx ** pvx),1.e-6) !.. low limit added by AAJ
+    dxy = (vx / cvy) ** (1. / pvy) / dny
+    dxy = max(dxy,1.e-5)
+    dxy = min(dxy,70.)
+    ynup = ynu + pvy
+    
+    if (rdx .lt. 38.) then
+       xjnum=exp(-rdx-gammln(xnu)-gammln(ynu))*rdx**(xnu-1.)*dnxi*( &
+            vx*(dx*dx*(gammap(ynu,dxy)-gammq(ynu,dxy)) &
+            +2.*dx*dny*gyn1*(gammap(ynu+1.,dxy)-gammq(ynu+1.,dxy)) &
+            +dny*dny*gyn2*(gammap(ynu+2.,dxy)-gammq(ynu+2.,dxy))) &
+            -vny*(dx*dx*gynp*(gammap(ynup,dxy)-gammq(ynup,dxy)) &
+            +2.*dx*dny*gynp1*(gammap(ynup+1.,dxy)-gammq(ynup+1.,dxy)) &
+            +dny*dny*gynp2*(gammap(ynup+2.,dxy)-gammq(ynup+2.,dxy))))
+    else
+       xjnum=0.
+    endif
+    return
+  end function xjnum
+
+  !--------------------------------------------------------------------------------------------------------------!
+  !--------------------------------------------------------------------------------------------------------------!
+  !.. Used by aggregation
+  REAL FUNCTION GAMMQ(A,X)
+
+    real :: x, a, gln, gamser
+
+    IF (X .LT. A+1.) THEN
+       CALL LOWGSERIES(GAMSER,A,X,GLN)
+       GAMMQ = 1. - GAMSER
+    ELSE
+       CALL HIGHGCONTFRAC(GAMMQ,A,X,GLN)
+    END IF
+    RETURN
+  END FUNCTION GAMMQ
+
+  !--------------------------------------------------------------------------------------------------------------!
+  !--------------------------------------------------------------------------------------------------------------!
+  !.. Computes P(a, x) = lower_gamma(a, x) / gamma(a)                                                     
+  !.. Using either series solution or continued fractions                                                        
+  real function gammap(a, x)
+    
+    implicit none
+    
+    REAL :: a, x, gammaser, gammacf, gln
+    
+    if(x.lt.0.0.or.a.lt.0.0) then
+       write(*,*) 'either x or a is less than zero'
+       write(*,*) x, a
+       return
+    endif
+    if(x.lt.(a + 1.0)) then
+       call lowgseries(gammaser, a, x, gln)
+       gammap = gammaser
+    else
+       call highgcontfrac(gammacf, a, x, gln)
+       gammap = 1.0 - gammacf
+    endif
+
+    return
+  end function gammap
+
+  !--------------------------------------------------------------------------------------------------------------!
+  !--------------------------------------------------------------------------------------------------------------!
+  !.. Returns: gln = ln(gamma(a))                                                                        
+  !.. Returns: gammaser = lower_gamma(a, x) as a series solution                                      
+  subroutine lowgseries(gammaser, a, x, gln)
+    
+    implicit none
+    
+    INTEGER, PARAMETER :: ITMAX = 100
+    INTEGER :: n
+    REAL :: gammaser, a, x, gln, sum, del, ap
+    REAL, PARAMETER :: EPS = 3.0e-7
+
+    gln = gammln(a)
+    if(x.le.0) then
+       gammaser = 0.0
+       return
+    endif
+
+    ap=a
+    sum=1./a
+    del=sum
+    do n = 1, ITMAX
+       ap=ap+1.
+       del=del*x/ap
+       sum=sum+del
+       if(abs(del).lt.abs(sum)*EPS) exit
+    enddo
+    
+    gammaser = sum*exp(-x+a*log(x)-gln)
+    return
+  end subroutine lowgseries
+
+  !--------------------------------------------------------------------------------------------------------------!
+  !--------------------------------------------------------------------------------------------------------------!
+  !.. Returns: gln = ln(gamma(a))                                                                                
+  !.. Returns: gammacf = upper_gamma(a, x) as a continued fractions solution                               
+  subroutine highgcontfrac(gammacf, a, x, gln)
+
+    implicit none
+
+    INTEGER, PARAMETER :: ITMAX = 100
+    INTEGER :: n
+    REAL :: gammacf, a, x, gln, b, c, d, h, del, an
+    REAL, PARAMETER :: EPS = 3.0e-7, FPMIN = 1.0e-30
+
+    gln = gammln(a)
+    b=x+1.-a
+    c=1./FPMIN
+    d=1./b
+    h=d
+    do n = 1, ITMAX
+       an=-n*(n-a)
+       b=b+2.
+       d=an*d+b
+       if(abs(d).lt.FPMIN) d = FPMIN
+       c=b+an/c
+       if(abs(c).lt.FPMIN) c = FPMIN
+       d = 1./d
+       del=d*c
+       h = h*del
+       if(abs(del-1.).lt.EPS) exit
+    enddo
+
+    gammacf = exp(-x+a*log(x)-gln)*h
+    return
+  end subroutine highgcontfrac
+
+  !--------------------------------------------------------------------------------------------------------------!
+  !--------------------------------------------------------------------------------------------------------------!
+  !.. Used by aggregation
+SUBROUTINE AVINT(X,Y,N,XLO,XUP,ANS)
+  DOUBLE PRECISION :: R3,RP5,SUM,SYL,SYL2,SYL3,SYU,SYU2,SYU3,X1,X2,X3 &
+       ,X12,X13,X23,TERM1,TERM2,TERM3,A,B,C,CA,CB,CC
+  REAL :: XLO,XUP,ANS,FL,FR,SLOPE
+  INTEGER :: N, I, INLFT,INRT,ISTART,ISTOP
+  REAL, DIMENSION(N) :: X,Y
+
+  ANS =0.0
+  IF (XLO-XUP) 3,100,200
+3 IF (N.LT.2) GO TO 215
+  DO 5 I=2,N
+     IF (X(I).LE.X(I-1)) GO TO 210
+     IF (X(I).GT.XUP) GO TO 6
+5    CONTINUE
+6    CONTINUE
+     IF (N.GE.3) GO TO 9
+  !.. special n=2 case                                                                              
+     SLOPE = (Y(2)-Y(1))/(X(2)-X(1))
+     FL = Y(1) + SLOPE*(XLO-X(1))
+     FR = Y(2) + SLOPE*(XUP-X(2))
+     ANS = 0.5*(FL+FR)*(XUP-XLO)
+     RETURN
+9    CONTINUE
+     IF (X(N-2).LT.XLO)  GO TO 205
+     IF (X(3).GT.XUP)    GO TO 205
+     I = 1
+10   IF (X(I).GE.XLO) GO TO 15
+     I = I+1
+     GO TO 10
+15   INLFT = I
+     I = N
+20   IF (X(I).LE.XUP) GO TO 25
+     I = I-1
+     GO TO 20
+25   INRT = I
+     IF ((INRT-INLFT).LT.2) GO TO 205
+     ISTART = INLFT
+     IF (INLFT.EQ.1) ISTART = 2
+     ISTOP  = INRT
+     IF (INRT.EQ.N)  ISTOP  = N-1
+
+     R3 = 3.0D0
+     RP5= 0.5D0
+     SUM = 0.0
+     SYL = XLO
+     SYL2= SYL*SYL
+     SYL3= SYL2*SYL
+
+     DO 50 I=ISTART,ISTOP
+        X1 = X(I-1)
+        X2 = X(I)
+        X3 = X(I+1)
+        X12 = X1-X2
+        X13 = X1-X3
+        X23 = X2-X3
+        TERM1 = DBLE(Y(I-1))/(X12*X13)
+        TERM2 =-DBLE(Y(I)) /(X12*X23)
+        TERM3 = DBLE(Y(I+1))/(X13*X23)
+        A = TERM1+TERM2+TERM3
+        B = -(X2+X3)*TERM1 - (X1+X3)*TERM2 - (X1+X2)*TERM3
+        C = X2*X3*TERM1 + X1*X3*TERM2 + X1*X2*TERM3
+        IF (I-ISTART) 30,30,35
+30      CA = A
+        CB = B
+        CC = C
+        GO TO 40
+35      CA = 0.5*(A+CA)
+        CB = 0.5*(B+CB)
+        CC = 0.5*(C+CC)
+40      SYU = X2
+        SYU2= SYU*SYU
+        SYU3= SYU2*SYU
+        SUM = SUM + CA*(SYU3-SYL3)/R3  + CB*RP5*(SYU2-SYL2) + CC*(SYU-SYL)
+        CA  = A
+        CB  = B
+        CC  = C
+        SYL = SYU
+        SYL2= SYU2
+        SYL3= SYU3
+50      CONTINUE
+        SYU = XUP
+        ANS = SUM + CA*(SYU**3-SYL3)/R3 + CB*RP5*(SYU**2-SYL2) &
+             + CC*(SYU-SYL)
+100     RETURN
+200     PRINT*, 'Upper limit of integration not greater than lower limit.'
+        STOP 'AVINT2'
+205     PRINT*, 'Less than 3 function values between integration limits.'
+        STOP 'AVINT3'
+210     PRINT*, 'Abscissas not strictly increasing.'
+        STOP 'AVINT4'
+215     PRINT*, 'Less than 2 function values were supplied.'
+        STOP 'AVINT5'
+   END SUBROUTINE
 
   !--------------------------------------------------------------------------------------------------------------!
   !--------------------------------------------------------------------------------------------------------------!
