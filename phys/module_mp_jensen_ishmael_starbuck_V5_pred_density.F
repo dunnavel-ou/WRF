@@ -25,10 +25,9 @@ module module_mp_jensen_ishmael
   !                 number are predicted and volume-weighted aggregate density is fixed. Using ellipsoids!
   !                 rather than spheres/fractals therefore provides multiplicative correction factors    !
   !                 for aggregate shapes based off Multi-Angle Snowflake Camera (MASC) data. Currently,  !
-  !                 aggregate shapes are fixed but future updates will predict shape. Aggregate density  !
-  !                 is either fixed or predicted.                                                        !
+  !                 shape and density are fixed but future updates will predict shape and density.       !
   !                                                                                                      !
-  !                 The tenative name for this aggregation scheme is:                                    !
+  !                 The tenative name for this weird aggregation scheme is:                              !
   !                 Stochastic Triple Axis Redistribution By Using Collection Kernels                    !
   !                                                  or                                                  !
   !                                          STARBUCK (Melville 1851)                                    !
@@ -74,8 +73,7 @@ module module_mp_jensen_ishmael
        Co          = 0.6,         &  !.. Mitchell 2005 fall speed drag parameter
        delta_0     = 5.83,        &  !.. Mitchell 2005 fall speed drag parameter
        phinuc      = 1.0,         &
-       Ec          = 0.05,         &
-       alphmon     = 1.0,         &
+       Ec          = 1.0,         &
        betmon      = 0.5,         &
        bcpg        = 0.,          & ! Phillips et al. 2015 Graupel Aggregation Sticking Efficiency
        ccpg        = 1.,          & ! Phillips et al. 2015 Graupel Aggregation Sticking Efficiency
@@ -84,14 +82,14 @@ module module_mp_jensen_ishmael
        E0pg        = 3.e4,        & ! Phillips et al. 2015 Graupel Aggregation Sticking Efficiency
        T1pg        = 0.,          & ! Phillips et al. 2015 Graupel Aggregation Sticking Efficiency
        gampg       = 1.,          & ! Phillips et al. 2015 Graupel Aggregation Sticking Efficiency
-       kampg        = 1.5,        & ! Phillips et al. 2015 Graupel Aggregation Sticking Efficiency
+       kampg        = 1.5,         & ! Phillips et al. 2015 Graupel Aggregation Sticking Efficiency
        chipag      = 1.,          & ! Phillips et al. 2015 Graupel Aggregation Sticking Efficiency
        chipbg      = 3.,          & ! Phillips et al. 2015 Graupel Aggregation Sticking Efficiency
        omegpg       = 0.1,        & ! Phillips et al. 2015 Graupel Aggregation Sticking Efficiency
        bcps         = 16.98,       & ! Phillips et al. 2015 Snow Aggregation Sticking Efficiency
        ccps         = 5.,        &
        !ccps         = 1.023,       & ! Phillips et al. 2015 Snow Aggregation Sticking Efficiency
-       dcps         = 35.,        &
+       dcps         = 50.,        &
        !dcps         = 3981.,       & ! Phillips et al. 2015 Snow Aggregation Sticking Efficiency
        fcps         = 4.e-6,       & ! Phillips et al. 2015 Snow Aggregation Sticking Efficiency
        E0ps         = 3.e4,        & ! Phillips et al. 2015 Snow Aggregation Sticking Efficiency
@@ -260,13 +258,11 @@ contains
    ! ellipsoid shapes. sigma is the orientation std. (cf. Ryzhkov et al. 2011)
    pba = 0.616
    pcb = 0.6795
-   !abatog = 0.2922
+   abatog = 0.2922
 
-   abatog = 1.0
-
-   ! pba = 0.75
-   ! pcb = 0.75
-   ! abatog = 0.001
+ !   pba = 0.75
+ !   pcb = 0.75
+ !   abatog = 0.001
 
 
     !pba = 0.95
@@ -1869,6 +1865,8 @@ contains
 
             if (cc.ne.IICE3) then
 
+
+
             alphstr = ao**(1.-deltastr(cc))
 
             if (deltastr(cc).gt.1.0) then
@@ -2434,7 +2432,7 @@ contains
              nmon(k)=ni(cc,k)*Nmonb ! Re-diagnose number of monomers keeping Nmon_avg const.
              ani(cc) = ((qi(cc,k)/ni(cc,k))/(fourthirdspi*rhobar(cc)*phiba_phica_bar)*&
              gamma(NU_AGG)/(gamma(NU_AGG+3.)))**(0.33333333)
-             amon(k) = max(NU_AGG*ani(cc)*((Nmonb)**(-betmon)/alphmon)*nmon(k),0.)
+             amon(k) = max(NU_AGG*ani(cc)*(Nmonb)**(-betmon)*nmon(k),0.)
 
              endif
 
@@ -2570,7 +2568,7 @@ contains
                 nmon(k)=Nmonb*ni(cc,k)
                 ani(cc) = ((qi(cc,k)/ni(cc,k))/(fourthirdspi*rhobar(cc)*phiba_phica_bar)*&
                 gamma(NU_AGG)/(gamma(NU_AGG+3.)))**(0.33333333)
-                amon(k) = max(NU_AGG*ani(cc)*((Nmonb)**(-betmon)/alphmon)*nmon(k),0.)
+                amon(k) = max(NU_AGG*ani(cc)*(Nmonb)**(-betmon)*nmon(k),0.)
                 endif
 
 
@@ -3457,11 +3455,9 @@ contains
              endif
 
 
-             ! Need to figure out why ani can sometimes be zero when ni and qi are non-negligible.
-             ! Update: seems like those places are where rhobar is high (rhobar > 900 kg/m^3)
              if (cc.eq.IICE3) then
-             call var_check_agg(fourthirdspi,qi(cc,k),amon(k),ni(cc,k),nmon(k),ani(cc),rhobar(cc))
-             if (qi(cc,k).gt.1.e-8.and.ni(cc,k).gt.0.1.and.ani(cc).gt.2.e-6.and.rhobar(cc).lt.900.) then
+             if (qi(cc,k).gt.1.e-8.and.rhobar(cc).lt.900.) then
+
              rhopo1d(cc,k) = rhobar(cc)
              di1d(cc,k) = 2.*NU_AGG*ani(cc) ! Currently number-weighted.
              vmi1d(cc,k) = vtrmi1(cc,k)
@@ -3966,12 +3962,14 @@ contains
     ! New diagnostic for aggregate an. amon gets weird.
     if (nmondum.gt.2.*qnsmall.and.qidum.gt.1.e-8.and.nidum.gt.qnsmall&
         .and.amondum/nmondum.gt.1.e-5.and.Nmonbdum.gt.0.and.rhobar_switch.eq.1) then
-    anagg = (alphmon*Nmonbdum**(betmon)*(amondum/nmondum))/NU_AGG
+    anagg = (Nmonbdum**(betmon)*(amondum/nmondum))/NU_AGG
 
     if (anagg.gt.1.e-4) then
     rhobar = qidum/(fourthirdspi*nidum*anagg**3*(gamma(NU_AGG+3.)/gamma(NU_AGG))*phiba_phica_bar)
 
-
+    !print*, 'rhobar_before=',rhobar
+    !print*, 'anagg_before=',anagg
+    !stop
 
     else
 
@@ -3980,7 +3978,7 @@ contains
     anagg = ((qidum/nidum)/(fourthirdspi*rhobar*phiba_phica_bar)*&
     gamma(NU_AGG)/(gamma(NU_AGG+3.)))**(0.33333333)
 
-    amondum = max(NU_AGG*anagg*((Nmonbdum)**(-betmon)/alphmon)*nmondum,0.)
+    amondum = max(NU_AGG*anagg*(Nmonbdum)**(-betmon)*nmondum,0.)
 
     endif
 
@@ -3993,7 +3991,7 @@ contains
            (gamma(nu_agg+3.)/gamma(nu_agg))*phiba_phica_bar)
 
    nmondum = Nmonbdum*nidum
-   amondum = max(NU_AGG*anagg*((Nmonbdum)**(-betmon)/alphmon)*nmondum,0.)
+   amondum = max(NU_AGG*anagg*(Nmonbdum)**(-betmon)*nmondum,0.)
   elseif(anagg.lt.anmin) then
    anagg = anmin
    ! Implicit breakup
@@ -4002,40 +4000,29 @@ contains
 
    nmondum = Nmonbdum*nidum
 
-   amondum = max(NU_AGG*anagg*((Nmonbdum)**(-betmon)/alphmon)*nmondum,0.)
+   amondum = max(NU_AGG*anagg*(Nmonbdum)**(-betmon)*nmondum,0.)
 
   endif
 
   !.. Density check
     if(rhobar.gt.RHOI) then
-
-   ! print*, 'rhobar_before=',rhobar
-   ! print*, 'anagg_before=',anagg
-   ! print*, 'qi_before=',qidum
-   ! print*, 'ni_before=',nidum
-   ! print*, 'nmon_before=',nmondum
-   ! print*, 'Nmonb_before=',Nmonbdum
-   ! print*, 'amon/Nmon=',amondum/nmondum
-   ! print*, '---------------------'
-
     rhobar=RHOI
     anagg = ((qidum/nidum)/(fourthirdspi*rhobar*phiba_phica_bar)*&
              gamma(NU_AGG)/(gamma(NU_AGG+3.)))**(0.33333333)
 
-    amondum = max(NU_AGG*anagg*((Nmonbdum)**(-betmon)/alphmon)*nmondum,0.)
+    amondum = max(NU_AGG*anagg*(Nmonbdum)**(-betmon)*nmondum,0.)
 
-    elseif(rhobar.lt.10.) then
-    rhobar=10.0
+    elseif(rhobar.lt.1.) then
+    rhobar=1.0
     anagg = ((qidum/nidum)/(fourthirdspi*rhobar*phiba_phica_bar)*&
     gamma(NU_AGG)/(gamma(NU_AGG+3.)))**(0.33333333)
 
-    amondum = max(NU_AGG*anagg*((Nmonbdum)**(-betmon)/alphmon)*nmondum,0.)
+    amondum = max(NU_AGG*anagg*(Nmonbdum)**(-betmon)*nmondum,0.)
 
 
     endif
 
     else
-
 
     rhobar = rhobar_ellip
     anagg = ((qidum/nidum)/(fourthirdspi*rhobar*phiba_phica_bar)*&
@@ -4054,7 +4041,7 @@ contains
    nmondum = Nmonbdum*nidum
 
 
-   amondum = max(NU_AGG*anagg*((Nmonbdum)**(-betmon)/alphmon)*nmondum,0.)
+   amondum = max(NU_AGG*anagg*(Nmonbdum)**(-betmon)*nmondum,0.)
 
    endif
 
@@ -4931,12 +4918,12 @@ endif
        real, parameter :: QNSMALL= 1.25e-7   ! Smallest ice number
        real, parameter :: QNMAX = 2.e6
        real, parameter :: QSMALL = 1.e-8
-       real, parameter :: ASMALL = 1.0e-4  ! Smallest size of collectee for which aggregation occurs
+       real, parameter :: ASMALL = 2.0e-4  ! Smallest size of collectee for which aggregation occurs
        real :: eff,ncrossloss,rcrossloss,nselfloss, &
             rselfloss,ncrossgain,rcrossgain,nselfgain,rselfgain
 
        integer :: kcol ! index for collection kernel expansion
-       integer, parameter :: eff_switch = 0 ! Switch for Eagg
+       integer, parameter :: eff_switch = 2 ! Switch for Eagg
        integer, parameter :: eff_col_switch = 0 ! 0 for snow, 1 for graupel
        integer, parameter :: eff_rhophi_switch = 1 ! Switch for phi/rhobar efficiencies
        real, parameter :: effc = 1.0
@@ -5778,8 +5765,8 @@ endif
 
           !if (qdum3.gt.1e-5.and.tempc.lt.-14.and.tempc.gt.-16) then
           !if (effpa.gt.1..or.effpp.gt.1..or.effpc.gt.1..or.effcp.gt.1.) then
-          !if (ppenxfer.gt.100..or.paenxfer.gt.100..or.ccenxfer.gt.100..or.pcenxfer.gt.100..or.aaenxfer.gt.100.) then
-          if (ndum3.gt.1.e6) then
+          if (ppenxfer.gt.0.1.or.paenxfer.gt.0.1.or.ccenxfer.gt.0.1.or.pcenxfer.gt.0.1.or.aaenxfer.gt.0.1) then
+          !if (ndum3.gt.1.e6) then
           print*, '-----------------'
           print*, 'Mass before:',qdum1,qdum2,qdum3
           print*, 'Number before:',ndum1,ndum2,ndum3
